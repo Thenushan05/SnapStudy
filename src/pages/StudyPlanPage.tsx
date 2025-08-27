@@ -524,15 +524,60 @@ export default function StudyPlanPage() {
               
               <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <Label htmlFor="date">Start Date & Time</Label>
-                  <Input
-                    id="date"
-                    type="datetime-local"
-                    value={form.start}
-                    min={formatForInput(new Date())}
-                    onChange={(e) => setForm(f => ({...f, start: e.target.value}))}
-                    className="mt-2"
-                  />
+                  <Label htmlFor="date">Start Date</Label>
+                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Date only */}
+                    <Input
+                      id="date"
+                      type="date"
+                      value={form.start ? form.start.slice(0, 10) : ''}
+                      onChange={(e) => {
+                        const datePart = e.target.value; // YYYY-MM-DD
+                        const timePart = form.start ? form.start.slice(11, 16) : '09:00';
+                        setForm(f => ({ ...f, start: `${datePart}T${timePart}` }));
+                      }}
+                    />
+                    {/* 24h time picker: Hours and Minutes */}
+                    <div className="flex items-center gap-3">
+                      {/* Hours (00-23) */}
+                      <Select
+                        value={form.start ? form.start.slice(11, 13) : ''}
+                        onValueChange={(h) => {
+                          const datePart = form.start ? form.start.slice(0, 10) : new Date().toISOString().slice(0,10);
+                          const mins = form.start ? form.start.slice(14, 16) : '00';
+                          setForm(f => ({ ...f, start: `${datePart}T${h}:${mins}` }));
+                        }}
+                      >
+                        <SelectTrigger className="w-24">
+                          <SelectValue placeholder="HH" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-64">
+                          {Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0')).map(h => (
+                            <SelectItem key={h} value={h}>{h}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <span className="text-sm text-muted">:</span>
+                      {/* Minutes (00-59) */}
+                      <Select
+                        value={form.start ? form.start.slice(14, 16) : ''}
+                        onValueChange={(m) => {
+                          const datePart = form.start ? form.start.slice(0, 10) : new Date().toISOString().slice(0,10);
+                          const hours = form.start ? form.start.slice(11, 13) : '09';
+                          setForm(f => ({ ...f, start: `${datePart}T${hours}:${m}` }));
+                        }}
+                      >
+                        <SelectTrigger className="w-24">
+                          <SelectValue placeholder="MM" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-64">
+                          {Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0')).map(m => (
+                            <SelectItem key={m} value={m}>{m}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
                 
                 <div>
