@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -321,7 +321,7 @@ export default function StudyPlanPage() {
     isPastDay: boolean;
     daysSessions: StudySession[];
   }> = ({ date, isCurrentMonth, isToday, isPastDay, daysSessions }) => {
-    const handleTap = useCallback(() => {
+    const handleOpen = useCallback(() => {
       if (isPastDay) return;
       const base = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0);
       const nowLocal = new Date();
@@ -331,7 +331,40 @@ export default function StudyPlanPage() {
       openAddWith(addAt);
     }, [date, isPastDay, isToday]);
 
-    const tapHandlers = useTapOrClick(() => handleTap(), { thresholdPx: 12, disableClickOnTouch: true });
+    // Long-press for touch, click for mouse
+    const longPressMs = 400;
+    const moveThresh = 10; // px
+    const lpTimer = useRef<number | null>(null);
+    const startXY = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+    const movedRef = useRef<boolean>(false);
+
+    const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+      if (!e.touches || e.touches.length === 0) return;
+      const t = e.touches[0];
+      startXY.current.x = t.clientX; startXY.current.y = t.clientY; movedRef.current = false;
+      // schedule open
+      lpTimer.current = window.setTimeout(() => {
+        if (!movedRef.current) handleOpen();
+      }, longPressMs);
+    };
+    const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+      if (!e.touches || e.touches.length === 0) return;
+      const t = e.touches[0];
+      const dx = Math.abs(t.clientX - startXY.current.x);
+      const dy = Math.abs(t.clientY - startXY.current.y);
+      if (dx > moveThresh || dy > moveThresh) {
+        movedRef.current = true;
+        if (lpTimer.current !== null) {
+          clearTimeout(lpTimer.current);
+          lpTimer.current = null;
+        }
+      }
+    };
+    const clearLP = () => { if (lpTimer.current !== null) { clearTimeout(lpTimer.current); lpTimer.current = null; } };
+    const onTouchEnd = () => { clearLP(); };
+    const onTouchCancel = () => { clearLP(); };
+
+    const tapHandlers = useTapOrClick(() => handleOpen(), { thresholdPx: 12, disableClickOnTouch: true });
 
     return (
       <div
@@ -343,7 +376,14 @@ export default function StudyPlanPage() {
           isPastDay && "cb-disabled"
         )}
         aria-disabled={isPastDay}
-        {...tapHandlers}
+        // Allow natural scroll; handle long-press only on touch
+        style={{ touchAction: 'pan-x pan-y' }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchCancel}
+        // Keep desktop click immediate
+        onClick={tapHandlers.onClick}
       >
         <div className="text-sm font-medium mb-1">{date.getDate()}</div>
         <div className="space-y-1">
