@@ -1,4 +1,84 @@
-# Welcome to your Lovable project
+# SnapStudy
+
+AI-powered study companion that turns photos of notes, textbooks, and diagrams into summaries, quizzes, mind maps, and structured learning content.
+
+## Features
+
+- Convert images to structured learning content (summaries, quizzes, mind maps)
+- Chat experience and history page
+- Responsive UI with shadcn/ui + Tailwind CSS
+- SPA routing with `react-router-dom`
+
+## Tech Stack
+
+- Vite + React + TypeScript
+- shadcn/ui + Tailwind CSS
+- Radix UI primitives
+- TanStack Query
+
+## Getting Started
+
+```bash
+npm install
+npm run dev
+```
+
+Dev server runs on http://localhost:8080 per `vite.config.ts`.
+
+## Build
+
+```bash
+npm run build
+npm run preview
+```
+
+Output is generated to `dist/`.
+
+## Deploy to Netlify
+
+This repo includes `netlify.toml`:
+
+```toml
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+```
+
+You can deploy via either method:
+
+- UI: Connect your Git repo in Netlify → set Build command to `npm run build` and Publish directory to `dist` (already in `netlify.toml`).
+- Drag-and-drop: Run `npm run build` locally and drag the `dist/` folder into the Netlify Sites dashboard.
+- CLI: `npm i -g netlify-cli` → `netlify deploy` (preview) or `netlify deploy --prod` (requires login).
+
+## Favicon and Branding
+
+Favicon links are defined in `index.html`:
+
+```html
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+```
+
+Replace the assets in `public/` with your branding:
+
+- `public/favicon.ico` (recommended 32x32 or 48x48)
+- `public/favicon.svg` (scalable)
+- `public/apple-touch-icon.png` (180x180)
+
+Optionally update OG/Twitter preview images in `index.html` (`og:image` and `twitter:image`).
+
+---
+
+## Legacy README (from template)
+> The original Lovable-generated README is preserved below for reference.
+> You can remove it if no longer needed.
+ 
 
 ## Project info
 

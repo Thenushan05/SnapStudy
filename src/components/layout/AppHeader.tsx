@@ -22,9 +22,13 @@ export function AppHeader({ onOpenSticky }: AppHeaderProps) {
       
       {/* Logo */}
       <div className="flex items-center gap-2 font-semibold text-lg">
-        <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-          <span className="text-white font-bold text-sm">S</span>
-        </div>
+        <img
+          src="/Snapstudy.png"
+          alt="SnapStudy logo"
+          className="w-8 h-8 rounded-lg select-none object-contain"
+          loading="eager"
+          decoding="async"
+        />
         <span className="hidden sm:inline text-text">SnapStudy</span>
       </div>
 

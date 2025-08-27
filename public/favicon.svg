@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SnapStudy">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="12" fill="url(#bg)"/>
+  <!-- Simplified book icon for small sizes -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 20h14a6 6 0 0 1 6 6v18H26a6 6 0 0 0-6 6V20z"/>
+    <path d="M34 20h10a6 6 0 0 1 6 6v18H40a6 6 0 0 0-6 6" opacity="0.9"/>
+    <path d="M26 26h10M26 32h12M26 38h8" opacity="0.9"/>
+  </g>
+  <!-- Small sparkle for learning vibe -->
+  <g fill="#FFFFFF">
+    <path d="M18 16l1.5 3.5L23 21l-3.5 1.5L18 26l-1.5-3.5L13 21l3.5-1.5L18 16z" opacity="0.9"/>
+  </g>
+</svg>
