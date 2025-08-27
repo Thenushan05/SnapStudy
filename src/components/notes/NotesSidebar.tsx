@@ -63,13 +63,15 @@ export function NotesSidebar({
   };
 
   const getPreviewText = (content: string) => {
-    // Remove markdown syntax and get first 100 characters
-    const plainText = content
+    // Strip HTML tags first, then remove markdown syntax, and get first 100 characters
+    const withoutHtml = content.replace(/<[^>]*>/g, " ");
+    const plainText = withoutHtml
       .replace(/^#+ /gm, "")
       .replace(/\*\*(.*?)\*\*/g, "$1")
       .replace(/\*(.*?)\*/g, "$1")
       .replace(/`(.*?)`/g, "$1")
       .replace(/\n+/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
     
     return plainText.length > 100 

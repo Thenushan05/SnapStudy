@@ -17,8 +17,8 @@ export function AppHeader({ onOpenSticky }: AppHeaderProps) {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-14 sm:h-16 border-b border-border bg-surface/80 backdrop-blur supports-[backdrop-filter]:bg-surface/70">
-      <div className="w-full max-w-7xl mx-auto h-full flex items-center gap-3 px-3 sm:px-4">
+    <header className="fixed top-0 left-0 right-0 z-50 h-14 sm:h-16 border-b border-border bg-surface/80 backdrop-blur supports-[backdrop-filter]:bg-surface/70 overflow-x-hidden">
+      <div className="w-full max-w-full mx-auto h-full flex items-center gap-3 px-3 sm:px-4 min-w-0">
         <SidebarTrigger />
 
         {/* Logo */}
@@ -34,7 +34,7 @@ export function AppHeader({ onOpenSticky }: AppHeaderProps) {
         </div>
 
         {/* Search Bar */}
-        <div className="flex-1 max-w-md relative hidden xs:flex">
+        <div className="flex-1 max-w-md relative hidden xs:flex min-w-0 overflow-hidden">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted w-4 h-4" />
           <Input
             placeholder="Search or ask anything..."
@@ -43,7 +43,7 @@ export function AppHeader({ onOpenSticky }: AppHeaderProps) {
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-2 ml-auto min-w-0">
           {/* Mobile sticky notes trigger */}
           <Button
             variant="outline"

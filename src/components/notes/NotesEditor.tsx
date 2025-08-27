@@ -215,7 +215,7 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-x-hidden">
       {/* Editor Header */}
       <div className="border-b border-border bg-surface p-4">
         <div className="space-y-4">
@@ -259,7 +259,7 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
       </div>
 
       {/* Top Controls */}
-      <div className="border-b border-border bg-surface p-2 flex items-center gap-2">
+      <div className="border-b border-border bg-surface p-2 flex items-center gap-2 overflow-x-hidden">
         <div className="flex-1" />
         <Button
           variant={showPreview ? "default" : "outline"}
@@ -279,13 +279,19 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 flex flex-col md:flex-row min-h-[60vh] md:min-h-0">
+      <div className="flex-1 flex flex-col md:flex-row min-h-[60vh] md:min-h-0 overflow-x-hidden">
         {/* Rich Text Editor (Quill) */}
-        <div className={`${isDrawingMode ? "md:w-1/2 w-full" : "w-full"} flex flex-col`}>
+        <div className={`${isDrawingMode ? "md:w-1/2 w-full" : "w-full"} flex flex-col overflow-x-hidden min-w-0`}>
           {/* Dark mode friendly placeholder color for Quill */}
           <style>{`
             .ql-editor.ql-blank::before { color: rgba(0,0,0,0.45); }
             .dark .ql-editor.ql-blank::before { color: rgba(255,255,255,0.6); }
+            /* Prevent horizontal overflow */
+            .ql-container, .ql-editor { max-width: 100%; overflow-x: hidden; }
+            .ql-editor { word-break: break-word; overflow-wrap: anywhere; }
+            .ql-editor img { max-width: 100%; height: auto; }
+            .ql-editor pre { white-space: pre-wrap; word-break: break-word; }
+            .ql-toolbar { overflow-x: auto; overscroll-behavior-x: contain; }
           `}</style>
           {/* Quill Toolbar (single, default panel) */}
           <div id="notes-quill-toolbar" className="border-b border-border p-2 flex items-center gap-1">
@@ -310,7 +316,7 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
               </button>
             </span>
           </div>
-          <div className="flex-1 min-h-[45vh] md:min-h-0">
+          <div className="flex-1 min-h-[45vh] md:min-h-0 overflow-x-hidden min-w-0">
             <ReactQuill
               ref={quillRef}
               theme="snow"
@@ -323,8 +329,8 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
           </div>
 
           {showPreview && (
-            <div className="border-t border-border bg-surface p-3 md:p-4">
-              <div className="prose prose-sm max-w-none space-y-2">
+            <div className="border-t border-border bg-surface p-3 md:p-4 overflow-x-hidden">
+              <div className="prose prose-sm max-w-none space-y-2 break-words">
                 {/* Render the Quill HTML content */}
                 <div dangerouslySetInnerHTML={{ __html: content }} />
               </div>
@@ -334,7 +340,7 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
 
         {/* Drawing Canvas */}
         {isDrawingMode && (
-          <div className="md:w-1/2 w-full md:border-l border-border md:border-t-0 border-t">
+          <div className="md:w-1/2 w-full md:border-l border-border md:border-t-0 border-t overflow-x-hidden">
             <DrawingCanvas
               onInsert={async (dataUrl) => {
                 const ta = textareaRef.current;

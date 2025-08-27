@@ -2,32 +2,29 @@ import { useEffect, useRef, useState } from "react";
 import { Canvas as FabricCanvas, Circle, Rect, PencilBrush } from "fabric";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { 
-  Pen, 
-  Square, 
-  Circle as CircleIcon, 
-  Eraser, 
-  Undo, 
+import {
+  Pen,
+  Square,
+  Circle as CircleIcon,
+  Eraser,
+  Undo,
   Trash2,
   Download,
   Upload,
-  FileText
 } from "lucide-react";
 import { toast } from "sonner";
 
 interface DrawingCanvasProps {
   onSave?: (dataUrl: string) => void;
-  onSaveJson?: (json: string) => void;
   onInsert?: (dataUrl: string) => void;
 }
 
-export function DrawingCanvas({ onSave, onSaveJson, onInsert }: DrawingCanvasProps) {
+export function DrawingCanvas({ onSave, onInsert }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const [activeColor, setActiveColor] = useState("#000000");
   const [activeTool, setActiveTool] = useState<"draw" | "rectangle" | "circle" | "eraser">("draw");
   const [brushSize, setBrushSize] = useState(2);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const AUTOSAVE_KEY = "drawing-canvas:v1";
   const autosaveTimeoutRef = useRef<number | null>(null);
 
@@ -155,52 +152,6 @@ export function DrawingCanvas({ onSave, onSaveJson, onInsert }: DrawingCanvasPro
     toast("Inserted drawing into note");
   };
 
-  const handleSaveJson = () => {
-    if (!fabricCanvas) return;
-    const json = JSON.stringify(fabricCanvas.toJSON());
-    // Download .json
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.download = `drawing-${Date.now()}.json`;
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
-    // Save to localStorage autosave
-    try { localStorage.setItem(AUTOSAVE_KEY, json); } catch (err) {
-      console.debug("Autosave failed (save JSON)", err);
-    }
-    // Callback if provided
-    onSaveJson?.(json);
-    toast("Editable drawing (JSON) saved!");
-  };
-
-  const handleLoadJsonFromFile = (file: File) => {
-    if (!fabricCanvas) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const json = typeof reader.result === "string" ? reader.result : "";
-        const data = JSON.parse(json);
-        fabricCanvas.loadFromJSON(data, () => {
-          fabricCanvas.renderAll();
-          // Save to autosave as well
-          try { localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data)); } catch (err) {
-            console.debug("Autosave failed (load JSON)", err);
-          }
-          toast("Drawing loaded from JSON");
-        });
-      } catch (e) {
-        toast("Failed to load JSON drawing");
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const triggerLoadJson = () => {
-    fileInputRef.current?.click();
-  };
-
   // Autosave on changes with small debounce
   useEffect(() => {
     if (!fabricCanvas) return;
@@ -315,26 +266,6 @@ export function DrawingCanvas({ onSave, onSaveJson, onInsert }: DrawingCanvasPro
             <Upload className="w-4 h-4 rotate-180" />
             Insert to Note
           </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSaveJson}
-            className="gap-2 ml-2"
-          >
-            <FileText className="w-4 h-4" />
-            Save JSON
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={triggerLoadJson}
-            className="gap-2 ml-2"
-          >
-            <Upload className="w-4 h-4" />
-            Load JSON
-          </Button>
         </div>
         
         {/* Color Palette */}
@@ -372,19 +303,6 @@ export function DrawingCanvas({ onSave, onSaveJson, onInsert }: DrawingCanvasPro
           <canvas ref={canvasRef} className="max-w-full" />
         </div>
       </div>
-
-      {/* Hidden JSON file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="application/json,.json"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleLoadJsonFromFile(file);
-          if (fileInputRef.current) fileInputRef.current.value = "";
-        }}
-      />
     </div>
   );
 }
