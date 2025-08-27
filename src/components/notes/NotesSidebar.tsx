@@ -78,7 +78,7 @@ export function NotesSidebar({
   };
 
   return (
-    <div className="w-80 border-r border-border bg-surface flex flex-col">
+    <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-border bg-surface flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between mb-4">

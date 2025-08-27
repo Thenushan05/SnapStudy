@@ -155,7 +155,7 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
 
       {/* Toolbar */}
       <div className="border-b border-border bg-surface p-2">
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
@@ -255,9 +255,9 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex flex-col md:flex-row">
         {/* Markdown Editor */}
-        <div className={`${isDrawingMode ? "w-1/2" : "w-full"} flex flex-col`}>
+        <div className={`${isDrawingMode ? "md:w-1/2 w-full" : "w-full"} flex flex-col`}>
           <Textarea
             value={content}
             onChange={(e) => handleContentChange(e.target.value)}
@@ -269,7 +269,7 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
 
         {/* Drawing Canvas */}
         {isDrawingMode && (
-          <div className="w-1/2 border-l border-border">
+          <div className="md:w-1/2 w-full md:border-l border-border md:border-t-0 border-t">
             <DrawingCanvas
               onInsert={(dataUrl) => {
                 const ta = textareaRef.current;

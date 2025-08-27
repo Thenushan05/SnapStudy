@@ -24,7 +24,7 @@ export default function NotesPage() {
   const selectedNote = notes.find(note => note.id === selectedNoteId);
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex flex-col md:flex-row overflow-x-hidden">
       <NotesSidebar 
         notes={notes}
         selectedNoteId={selectedNoteId}
