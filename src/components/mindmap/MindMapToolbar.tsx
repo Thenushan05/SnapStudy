@@ -8,7 +8,8 @@ import {
   Plus, 
   Brain, 
   FileQuestion,
-  Maximize
+  Maximize,
+  Trash
 } from "lucide-react";
 
 type MindMapAction =
@@ -19,7 +20,8 @@ type MindMapAction =
   | "export"
   | "add-node"
   | "expand-with-ai"
-  | "create-quiz";
+  | "create-quiz"
+  | "delete-node";
 
 interface MindMapToolbarProps {
   selectedNodeId: string | null;
@@ -92,6 +94,15 @@ export function MindMapToolbar({ selectedNodeId, onAction }: MindMapToolbarProps
             
             {selectedNodeId && (
               <>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => onAction("delete-node", selectedNodeId)}
+                  className="gap-2"
+                >
+                  <Trash className="w-4 h-4" />
+                  Delete
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"

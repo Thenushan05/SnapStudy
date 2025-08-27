@@ -11,10 +11,11 @@ export interface Node {
 }
 
 interface MindMapCanvasProps {
-  onNodeSelect: (nodeId: string | null) => void;
+  onNodeSelect?: (id: string | null) => void;
   nodes?: Node[];
   editable?: boolean;
   onNodesChange?: (nodes: Node[]) => void;
+  onRequestRename?: (id: string) => void;
   options?: {
     autoLayout?: boolean;
     spacingX?: number; // horizontal spacing between siblings
@@ -56,7 +57,7 @@ export type MindMapCanvasHandle = {
   exportImage: () => void;
 };
 
-export const MindMapCanvas = forwardRef<MindMapCanvasHandle, MindMapCanvasProps>(function MindMapCanvas({ onNodeSelect, nodes: externalNodes, editable, onNodesChange, options }, ref) {
+export const MindMapCanvas = forwardRef<MindMapCanvasHandle, MindMapCanvasProps>(function MindMapCanvas({ onNodeSelect, nodes: externalNodes, editable, onNodesChange, onRequestRename, options }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -427,29 +428,19 @@ export const MindMapCanvas = forwardRef<MindMapCanvasHandle, MindMapCanvasProps>
         onClick={handleCanvasClick}
         onDoubleClick={(e) => {
           if (!editable) return;
-          const { x, y } = (function() {
-            const rect = canvasRef.current!.getBoundingClientRect();
-            const wx = (e.clientX - rect.left - offset.x) / scale;
-            const wy = (e.clientY - rect.top - offset.y) / scale;
-            return { x: wx, y: wy };
-          })();
+          const rect = canvasRef.current!.getBoundingClientRect();
+          const wx = (e.clientX - rect.left - offset.x) / scale;
+          const wy = (e.clientY - rect.top - offset.y) / scale;
           let hit: string | null = null;
           for (const node of nodes) {
             const box = boxMapRef.current.get(node.id);
             if (!box) continue;
-            if (x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) {
+            if (wx >= box.x && wx <= box.x + box.w && wy >= box.y && wy <= box.y + box.h) {
               hit = node.id;
               break;
             }
           }
-          if (hit) {
-            const current = latestNodesRef.current.find(n => n.id === hit);
-            const nextLabel = window.prompt("Rename node", current?.label ?? "");
-            if (nextLabel && nextLabel.trim()) {
-              const updated = latestNodesRef.current.map(n => n.id === hit ? { ...n, label: nextLabel.trim() } : n);
-              onNodesChange?.(updated);
-            }
-          }
+          if (hit) onRequestRename?.(hit);
         }}
         onWheel={handleWheel}
         onMouseDown={onMouseDown}
