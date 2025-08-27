@@ -32,6 +32,7 @@ import {
   Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTapOrClick } from "@/hooks/use-tap-or-click";
 
 interface StudySession {
   id: string;
@@ -311,6 +312,66 @@ export default function StudyPlanPage() {
     end.setHours(weekEndHour, 0, 0, 0);
     return end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }, [form.start, weekEndHour]);
+
+  // Month view day cell component with scroll-safe tap handling on mobile
+  const CalendarDayCell: React.FC<{
+    date: Date;
+    isCurrentMonth: boolean;
+    isToday: boolean;
+    isPastDay: boolean;
+    daysSessions: StudySession[];
+  }> = ({ date, isCurrentMonth, isToday, isPastDay, daysSessions }) => {
+    const handleTap = useCallback(() => {
+      if (isPastDay) return;
+      const base = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0);
+      const nowLocal = new Date();
+      const addAt = (isToday && base < nowLocal)
+        ? new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), nowLocal.getHours() + 1, 0)
+        : base;
+      openAddWith(addAt);
+    }, [date, isPastDay, isToday]);
+
+    const tapHandlers = useTapOrClick(() => handleTap(), { thresholdPx: 12, disableClickOnTouch: true });
+
+    return (
+      <div
+        className={cn(
+          "min-h-[84px] sm:min-h-[100px] p-2 border border-border/50 rounded-lg transition-colors",
+          !isPastDay && "hover:bg-accent/20",
+          !isCurrentMonth && "text-muted bg-muted/20",
+          isToday && "ring-2 ring-accent bg-accent/10",
+          isPastDay && "cb-disabled"
+        )}
+        aria-disabled={isPastDay}
+        {...tapHandlers}
+      >
+        <div className="text-sm font-medium mb-1">{date.getDate()}</div>
+        <div className="space-y-1">
+          {daysSessions.slice(0, 3).map(session => (
+            <div
+              key={session.id}
+              className={cn(
+                "text-[11px] p-1 rounded text-white font-medium truncate cursor-pointer border shadow-sm",
+                !session.color && subjectColor(session.subject)
+              )}
+              style={session.color ? { backgroundColor: session.color } : undefined}
+              onClick={(e) => { e.stopPropagation(); openDetails(session.id); }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate">{session.emoji ? `${session.emoji} ` : ''}{session.subject}</span>
+                <span className={cn("w-2 h-2 rounded-full", session.status === 'completed' ? 'bg-white' : 'bg-white/60')} />
+              </div>
+              <div className="truncate opacity-90">{session.topic}</div>
+              <div className="opacity-90 text-[10px]">{formatRange(session.startDate, session.duration)}</div>
+            </div>
+          ))}
+          {daysSessions.length > 3 && (
+            <div className="text-xs text-muted">+{daysSessions.length - 3} more</div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-6">
@@ -605,67 +666,22 @@ export default function StudyPlanPage() {
                         
                         {/* Calendar Days */}
                         {Array.from({ length: 35 }, (_, i) => {
-                        const date = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), i - 6);
-                        const isCurrentMonth = date.getMonth() === selectedDate.getMonth();
-                        const isToday = date.toDateString() === new Date().toDateString();
-                        const isPastDay = date < todayStart; // entire day in the past
-                        const daysSessions = sessions.filter(s => 
-                          s.startDate.toDateString() === date.toDateString()
-                        );
-                        
-                        return (
-                          <div key={i} className={cn(
-                              "min-h-[84px] sm:min-h-[100px] p-2 border border-border/50 rounded-lg transition-colors",
-                              !isPastDay && "hover:bg-accent/20",
-                              !isCurrentMonth && "text-muted bg-muted/20",
-                              isToday && "ring-2 ring-accent bg-accent/10",
-                              isPastDay && "cb-disabled"
-                            )}
-                            aria-disabled={isPastDay}
-                            onClick={() => {
-                            if (isPastDay) return;
-                            const base = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0);
-                            const nowLocal = new Date();
-                            const addAt = (isToday && base < nowLocal)
-                              ? new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), nowLocal.getHours() + 1, 0)
-                              : base;
-                            openAddWith(addAt);
-                          }}
-                          onPointerDown={(e) => {
-                            // Mirror click for better mobile support
-                            if (e.pointerType === 'touch') {
-                              if (isPastDay) return;
-                              const base = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0);
-                              const nowLocal = new Date();
-                              const addAt = (isToday && base < nowLocal)
-                                ? new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), nowLocal.getHours() + 1, 0)
-                                : base;
-                              openAddWith(addAt);
-                            }
-                          }}
-                          >
-                            <div className="text-sm font-medium mb-1">{date.getDate()}</div>
-                            <div className="space-y-1">
-                              {daysSessions.slice(0, 3).map(session => (
-                                <div key={session.id} className={cn(
-                                  "text-[11px] p-1 rounded text-white font-medium truncate cursor-pointer border shadow-sm",
-                                  !session.color && subjectColor(session.subject)
-                                )} style={session.color ? { backgroundColor: session.color } : undefined} onClick={(e) => { e.stopPropagation(); openDetails(session.id); }}>
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="truncate">{session.emoji ? `${session.emoji} ` : ''}{session.subject}</span>
-                                    <span className={cn("w-2 h-2 rounded-full", session.status === 'completed' ? 'bg-white' : 'bg-white/60')} />
-                                  </div>
-                                  <div className="truncate opacity-90">{session.topic}</div>
-                                  <div className="opacity-90 text-[10px]">{formatRange(session.startDate, session.duration)}</div>
-                                </div>
-                              ))}
-                              {daysSessions.length > 3 && (
-                                <div className="text-xs text-muted">+{daysSessions.length - 3} more</div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                          const date = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), i - 6);
+                          const isCurrentMonth = date.getMonth() === selectedDate.getMonth();
+                          const isToday = date.toDateString() === new Date().toDateString();
+                          const isPastDay = date < todayStart; // entire day in the past
+                          const daysSessions = sessions.filter(s => s.startDate.toDateString() === date.toDateString());
+                          return (
+                            <CalendarDayCell
+                              key={i}
+                              date={date}
+                              isCurrentMonth={isCurrentMonth}
+                              isToday={isToday}
+                              isPastDay={isPastDay}
+                              daysSessions={daysSessions}
+                            />
+                          );
+                        })}
                     </div>
                   </div>
                 </div>
