@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -18,6 +19,63 @@ interface ChatThreadProps {
 
 export function ChatThread({ messages, isLoading }: ChatThreadProps) {
   const { toast } = useToast();
+  const [typedText, setTypedText] = useState("");
+  const [isAnimating, setIsAnimating] = useState(false);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const prevAssistantKeyRef = useRef<string | null>(null);
+
+  // Find last assistant message index
+  const lastAssistantIndex = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].type === "assistant") return i;
+    }
+    return -1;
+  })();
+
+  // Typing animation for last assistant message (only when it's new)
+  useEffect(() => {
+    if (lastAssistantIndex === -1) {
+      setTypedText("");
+      setIsAnimating(false);
+      return;
+    }
+    const last = messages[lastAssistantIndex];
+    const key = `${last?.content ?? ""}|${(last?.timestamp as Date | undefined)?.getTime?.() ?? ""}`;
+    if (key === prevAssistantKeyRef.current) {
+      // Same last assistant as before; don't animate
+      setIsAnimating(false);
+      setTypedText("");
+      return;
+    }
+
+    // New assistant message detected -> animate
+    prevAssistantKeyRef.current = key;
+    const full = last?.content || "";
+    setTypedText("");
+    setIsAnimating(true);
+    let i = 0;
+    const timers: number[] = [];
+    const tick = () => {
+      setTypedText(full.slice(0, i + 1));
+      i++;
+      if (i < full.length) {
+        const t = window.setTimeout(tick, 15);
+        timers.push(t);
+      } else {
+        setIsAnimating(false);
+      }
+    };
+    const first = window.setTimeout(tick, 50);
+    timers.push(first);
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+    };
+  }, [messages, lastAssistantIndex]);
+
+  // Auto scroll to bottom when messages or loading/typing changes
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isLoading, typedText]);
   const handleAddToSticky = (text: string) => {
     const note = addStickyFromText(text, { color: "yellow" });
     toast({
@@ -58,7 +116,20 @@ export function ChatThread({ messages, isLoading }: ChatThreadProps) {
                 : "bg-surface border border-border"
             }`}
           >
-            <p className="text-sm leading-relaxed">{message.content}</p>
+            <p className="text-sm leading-relaxed">
+              {index === lastAssistantIndex && message.type === "assistant" && isAnimating ? (
+                <>
+                  {typedText}
+                  <span className="inline-flex items-center ml-1 align-middle">
+                    <span className="w-1.5 h-1.5 bg-muted rounded-full animate-pulse"></span>
+                    <span className="w-1.5 h-1.5 bg-muted rounded-full animate-pulse ml-0.5 delay-100"></span>
+                    <span className="w-1.5 h-1.5 bg-muted rounded-full animate-pulse ml-0.5 delay-200"></span>
+                  </span>
+                </>
+              ) : (
+                message.content
+              )}
+            </p>
             {message.type === "assistant" && (
               <div className="mt-2 flex gap-1">
                 <TooltipProvider>
@@ -121,6 +192,7 @@ export function ChatThread({ messages, isLoading }: ChatThreadProps) {
           </div>
         </div>
       )}
+      <div ref={bottomRef} />
     </div>
   );
 }

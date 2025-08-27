@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Paperclip, Mic } from "lucide-react";
@@ -8,8 +8,43 @@ interface ChatComposerProps {
   disabled?: boolean;
 }
 
+const PLACEHOLDERS = [
+  "Ask about your notes...",
+  "Try /summary, /explain, /quiz, /mindmap",
+  "Attach an image to analyze",
+];
+
 export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
   const [message, setMessage] = useState("");
+  const [phText, setPhText] = useState("");
+  const [phIndex, setPhIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Typing animation for placeholder
+  useEffect(() => {
+    if (disabled) return; // pause when disabled
+    const current = PLACEHOLDERS[phIndex % PLACEHOLDERS.length];
+    const speed = isDeleting ? 40 : 70;
+    const timeout = setTimeout(() => {
+      if (!isDeleting) {
+        const next = current.slice(0, phText.length + 1);
+        setPhText(next);
+        if (next === current) {
+          setIsDeleting(true);
+          // small hold before deleting
+          setTimeout(() => {}, 600);
+        }
+      } else {
+        const next = current.slice(0, Math.max(0, phText.length - 1));
+        setPhText(next);
+        if (next.length === 0) {
+          setIsDeleting(false);
+          setPhIndex((i) => (i + 1) % PLACEHOLDERS.length);
+        }
+      }
+    }, speed);
+    return () => clearTimeout(timeout);
+  }, [phText, isDeleting, phIndex, disabled]);
 
   const handleSend = () => {
     if (message.trim() && !disabled) {
@@ -30,7 +65,7 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
       <div className="max-w-4xl mx-auto">
         <div className="relative">
           <Textarea
-            placeholder="Ask about your notes, or try /summary, /explain, /quiz, /mindmap..."
+            placeholder={phText || "Ask about your notes..."}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={handleKeyPress}
