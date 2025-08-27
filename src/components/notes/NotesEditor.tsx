@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect } from "react";
+import { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import type Quill from "quill";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +44,8 @@ export function NotesEditor({
   const [tags, setTags] = useState(note.tags);
   const [showPreview, setShowPreview] = useState(false);
   const [newTag, setNewTag] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const prevNoteIdRef = useRef(note.id);
 
@@ -63,6 +65,37 @@ export function NotesEditor({
     setContent(newContent);
     onChange(newContent);
   };
+
+  // Save note to backend
+  const saveNote = useCallback(async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    const toastId = `save-${note.id}`;
+    try {
+      toast("Saving note…", { id: toastId });
+      await api.notes.save({ id: note.id, title, content, tags });
+      setLastSavedAt(new Date());
+      toast.success("Note saved", { id: toastId });
+    } catch (err) {
+      console.error("Failed to save note", err);
+      toast.error("Failed to save note", { id: toastId });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [isSaving, note.id, title, content, tags]);
+
+  // Keyboard shortcut: Ctrl/Cmd+S to save
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const meta = navigator.platform.toLowerCase().includes("mac") ? e.metaKey : e.ctrlKey;
+      if (meta && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        saveNote();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [saveNote]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value;
@@ -297,7 +330,19 @@ export function NotesEditor({
 
       {/* Top Controls */}
       <div className="border-b border-border bg-surface p-2 flex items-center gap-2 overflow-x-hidden">
-        <div className="flex-1" />
+        <div className="flex-1 text-xs text-muted">
+          {lastSavedAt ? `Saved ${lastSavedAt.toLocaleTimeString()}` : ""}
+        </div>
+        <Button
+          variant="default"
+          size="sm"
+          className="gap-2"
+          onClick={saveNote}
+          disabled={isSaving}
+        >
+          <Save className="w-4 h-4" />
+          {isSaving ? "Saving…" : "Save"}
+        </Button>
         <Button
           variant={showPreview ? "default" : "outline"}
           size="sm"
@@ -309,9 +354,9 @@ export function NotesEditor({
         <Button variant="outline" size="sm" className="gap-2 mr-2" onClick={clearTextKeepImages}>
           Clear Text
         </Button>
-        <Button variant="outline" size="sm" className="gap-2" onClick={exportToPDF}>
+        <Button variant="outline" size="sm" className="gap-2 hidden sm:inline-flex" onClick={exportToPDF}>
           <Save className="w-4 h-4" />
-          Save
+          Export PDF
         </Button>
       </div>
 

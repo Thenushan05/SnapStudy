@@ -1,8 +1,9 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { addStickyFromText } from "@/lib/stickyStorage";
-import { User, Bot, StickyNote } from "lucide-react";
+import { User, Bot, StickyNote, Copy } from "lucide-react";
 
 export interface Message {
   type: "user" | "assistant";
@@ -25,6 +26,14 @@ export function ChatThread({ messages, isLoading }: ChatThreadProps) {
     });
     return note;
   };
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Copied", description: "Response copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", description: "Could not copy to clipboard.", variant: "destructive" });
+    }
+  };
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {messages.map((message, index) => (
@@ -35,9 +44,9 @@ export function ChatThread({ messages, isLoading }: ChatThreadProps) {
           }`}
         >
           {message.type === "assistant" && (
-            <Avatar className="w-8 h-8 bg-accent">
-              <AvatarFallback>
-                <Bot className="w-4 h-4 text-white" />
+            <Avatar className="w-8 h-8 bg-gradient-to-br from-indigo-500 via-fuchsia-500 to-pink-500 ring-2 ring-white/50 dark:ring-white/20 shadow-sm">
+              <AvatarFallback className="bg-transparent text-white">
+                <Bot className="w-4 h-4" />
               </AvatarFallback>
             </Avatar>
           )}
@@ -51,16 +60,37 @@ export function ChatThread({ messages, isLoading }: ChatThreadProps) {
           >
             <p className="text-sm leading-relaxed">{message.content}</p>
             {message.type === "assistant" && (
-              <div className="mt-2 flex gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleAddToSticky(message.content)}
-                  className="gap-2"
-                >
-                  <StickyNote className="w-4 h-4" />
-                  Add to Sticky Notes
-                </Button>
+              <div className="mt-2 flex gap-1">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleAddToSticky(message.content)}
+                        aria-label="Add to Sticky Notes"
+                        className="w-8 h-8"
+                      >
+                        <StickyNote className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Add to Sticky Notes</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleCopy(message.content)}
+                        aria-label="Copy response"
+                        className="w-8 h-8"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Copy</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             )}
           </div>

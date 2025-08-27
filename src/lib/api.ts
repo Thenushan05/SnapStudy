@@ -133,6 +133,15 @@ export const api = {
       return res;
     },
   },
+  // Notes API for saving editor content
+  notes: {
+    async save(payload: { id: string; title: string; content: string; tags: string[] }, opts?: { signal?: AbortSignal }) {
+      if (!payload?.id) throw new Error("Note id is required");
+      const body = { title: payload.title, content: payload.content, tags: payload.tags };
+      // PUT to /notes/:id. Adjust path if your backend differs.
+      await http.put(`/notes/${encodeURIComponent(payload.id)}`, body, { signal: opts?.signal, timeoutMs: 10000 });
+    },
+  },
 } as const;
 
 // Backward-compatible helper

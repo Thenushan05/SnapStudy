@@ -77,19 +77,19 @@ export default function StickyNotesPage() {
   };
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="p-4 md:p-6 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Sticky Notes</h1>
-        <div className="flex items-center gap-2">
-          <Input placeholder="Search notes..." value={query} onChange={(e) => setQuery(e.target.value)} className="w-56" />
-          <Button variant="outline" onClick={refreshFromStorage} className="gap-2"><RefreshCw className="w-4 h-4"/> Refresh</Button>
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+          <Input placeholder="Search notes..." value={query} onChange={(e) => setQuery(e.target.value)} className="w-full sm:w-56" />
+          <Button variant="outline" onClick={refreshFromStorage} className="gap-2 whitespace-nowrap"><RefreshCw className="w-4 h-4"/> Refresh</Button>
         </div>
       </div>
 
       {filtered.length === 0 ? (
         <div className="text-sm text-muted">No sticky notes yet. Add from chat using "Add to Sticky Notes".</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" onDrop={onDrop}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4" onDrop={onDrop}>
           {[...pinned, ...unpinned].map(note => (
             <Card
               key={note.id}
