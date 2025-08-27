@@ -156,7 +156,11 @@ export function NotesSidebar({
                     : "border-border hover:border-accent/50"
                   }
                 `}
-                onClick={() => onNoteSelect(note.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  console.log('Note card clicked:', note.id);
+                  onNoteSelect(note.id);
+                }}
               >
                 <CardContent className="p-3">
                   <div className="space-y-2">

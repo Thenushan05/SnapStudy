@@ -26,9 +26,18 @@ interface Note {
 interface NotesEditorProps {
   note: Note;
   onChange: (content: string) => void;
+  onTitleChange?: (title: string) => void;
+  onTagsChange?: (tags: string[]) => void;
 }
 
-export function NotesEditor({ note, onChange }: NotesEditorProps) {
+export function NotesEditor({ 
+  note, 
+  onChange, 
+  onTitleChange, 
+  onTagsChange 
+}: NotesEditorProps) {
+  console.log('NotesEditor received note:', note);
+  
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -36,10 +45,34 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [newTag, setNewTag] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const prevNoteIdRef = useRef(note.id);
+
+  // Reset local state when note prop changes
+  useEffect(() => {
+    if (prevNoteIdRef.current !== note.id) {
+      console.log('Note changed from', prevNoteIdRef.current, 'to', note.id);
+      setTitle(note.title);
+      setContent(note.content);
+      setTags(note.tags);
+      prevNoteIdRef.current = note.id;
+    }
+  }, [note.id, note.title, note.content, note.tags]);
 
   const handleContentChange = (newContent: string) => {
+    console.log('Content changed:', newContent);
     setContent(newContent);
     onChange(newContent);
+  };
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTitle = e.target.value;
+    setTitle(newTitle);
+    if (onTitleChange) onTitleChange(newTitle);
+  };
+
+  const handleTagsChange = (newTags: string[]) => {
+    setTags(newTags);
+    if (onTagsChange) onTagsChange(newTags);
   };
 
   // Helpers to apply Quill formatting instead of inserting markdown characters
@@ -151,13 +184,17 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
 
   const addTag = () => {
     if (newTag.trim() && !tags.includes(newTag.trim())) {
-      setTags([...tags, newTag.trim()]);
+      const updatedTags = [...tags, newTag.trim()];
+      setTags(updatedTags);
       setNewTag("");
+      if (onTagsChange) onTagsChange(updatedTags);
     }
   };
 
   const removeTag = (tagToRemove: string) => {
-    setTags(tags.filter(tag => tag !== tagToRemove));
+    const updatedTags = tags.filter(tag => tag !== tagToRemove);
+    setTags(updatedTags);
+    if (onTagsChange) onTagsChange(updatedTags);
   };
 
   // Quill toolbar/modules
@@ -221,7 +258,7 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
         <div className="space-y-4">
           <Input
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={handleTitleChange}
             className="text-lg font-semibold border-none bg-transparent p-0 focus-visible:ring-0"
             placeholder="Note title..."
           />
@@ -316,7 +353,7 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
               </button>
             </span>
           </div>
-          <div className="flex-1 min-h-[45vh] md:min-h-0 overflow-x-hidden min-w-0">
+          <div className="flex-1 min-h-[45vh] md:min-h-0 overflow-x-hidden min-w-0 p-3 md:p-0">
             <ReactQuill
               ref={quillRef}
               theme="snow"
