@@ -135,6 +135,55 @@ export default function StudyPlanPage() {
     return 'bg-muted-foreground';
   };
 
+  // Week view hour cell with long-press on touch and click on desktop
+  const WeekHourCell: React.FC<{ slotDate: Date; isPastSlot: boolean }> = ({ slotDate, isPastSlot }) => {
+    const handleOpen = useCallback(() => {
+      if (isPastSlot) return;
+      openAddWith(slotDate);
+    }, [slotDate, isPastSlot]);
+
+    const longPressMs = 400;
+    const moveThresh = 10;
+    const lpTimer = useRef<number | null>(null);
+    const startXY = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+    const movedRef = useRef<boolean>(false);
+
+    const onTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+      if (!e.touches || e.touches.length === 0) return;
+      const t = e.touches[0];
+      startXY.current.x = t.clientX; startXY.current.y = t.clientY; movedRef.current = false;
+      lpTimer.current = window.setTimeout(() => {
+        if (!movedRef.current) handleOpen();
+      }, longPressMs);
+    };
+    const onTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+      if (!e.touches || e.touches.length === 0) return;
+      const t = e.touches[0];
+      const dx = Math.abs(t.clientX - startXY.current.x);
+      const dy = Math.abs(t.clientY - startXY.current.y);
+      if (dx > moveThresh || dy > moveThresh) {
+        movedRef.current = true;
+        if (lpTimer.current !== null) { clearTimeout(lpTimer.current); lpTimer.current = null; }
+      }
+    };
+    const clearLP = () => { if (lpTimer.current !== null) { clearTimeout(lpTimer.current); lpTimer.current = null; } };
+    const onTouchEnd = () => { clearLP(); };
+    const onTouchCancel = () => { clearLP(); };
+
+    return (
+      <div
+        className={cn("border-t border-border/60 last:border-b odd:bg-muted/5", isPastSlot && "cb-disabled")}
+        aria-disabled={isPastSlot}
+        style={{ touchAction: 'pan-x pan-y' }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchCancel}
+        onClick={() => { if (!isPastSlot) handleOpen(); }}
+      />
+    );
+  };
+
   // Compute max duration from a given start date-time against current week range (end exclusive)
   const computeMaxDuration = useCallback((d: Date) => {
     if (isNaN(d.getTime())) return 0;
@@ -473,7 +522,7 @@ export default function StudyPlanPage() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <Label htmlFor="date">Start Date & Time</Label>
                   <Input
@@ -482,6 +531,7 @@ export default function StudyPlanPage() {
                     value={form.start}
                     min={formatForInput(new Date())}
                     onChange={(e) => setForm(f => ({...f, start: e.target.value}))}
+                    className="mt-2"
                   />
                 </div>
                 
@@ -693,6 +743,10 @@ export default function StudyPlanPage() {
                         <ChevronRight className="w-4 h-4" />
                       </Button>
                     </div>
+                    {/* Mobile hint */}
+                    <div className="md:hidden px-2 text-xs text-muted">
+                      Long-press a day to add a session
+                    </div>
                     
                     {/* Calendar Grid (7 columns with horizontal scroll on mobile to preserve alignment) */}
                     <div className="overflow-x-auto">
@@ -728,7 +782,20 @@ export default function StudyPlanPage() {
               ) : (
                 <div className="space-y-4">
                   {/* Week Navigation */}
-                  <div className="flex items-center justify-between">
+                  {/* Mobile: simplified Previous/Next */}
+                  <div className="flex items-center justify-between md:hidden">
+                    <Button variant="ghost" size="sm" className="gap-2" onClick={() => setSelectedDate(addDays(selectedDate, -7))}>
+                      <ChevronLeft className="w-4 h-4" />
+                      Previous
+                    </Button>
+                    <h3 className="font-semibold text-lg">Week View</h3>
+                    <Button variant="ghost" size="sm" className="gap-2" onClick={() => setSelectedDate(addDays(selectedDate, 7))}>
+                      Next
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {/* Desktop: full labels */}
+                  <div className="hidden md:flex items-center justify-between">
                     <Button variant="ghost" size="sm" className="gap-2" onClick={() => setSelectedDate(addDays(selectedDate, -7))}>
                       <ChevronLeft className="w-4 h-4" />
                       Previous Week
@@ -743,6 +810,7 @@ export default function StudyPlanPage() {
                   {/* Week Grid */}
               <div className="overflow-x-auto pb-2">
                 <div className="md:hidden px-2 pb-1 text-xs text-muted">Swipe horizontally to view all days</div>
+                <div className="md:hidden px-2 pb-2 text-xs text-muted">Long-press a time slot to add a session</div>
                 <div className="grid grid-cols-8 gap-2 min-w-[960px] sm:min-w-0 px-2 sm:px-0">
                   {/* Time Column */}
                   <div className="space-y-2 border-r border-border/60">
@@ -785,21 +853,7 @@ export default function StudyPlanPage() {
                                 const slotDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, 0);
                                 const isPastSlot = slotDate < now;
                                 return (
-                                  <div
-                                    key={hourIndex}
-                                    className={cn("border-t border-border/60 last:border-b odd:bg-muted/5", isPastSlot && "cb-disabled")}
-                                    aria-disabled={isPastSlot}
-                                    onClick={() => {
-                                      if (isPastSlot) return;
-                                      openAddWith(slotDate);
-                                    }}
-                                    onPointerDown={(e) => {
-                                      if (e.pointerType === 'touch') {
-                                        if (isPastSlot) return;
-                                        openAddWith(slotDate);
-                                      }
-                                    }}
-                                  />
+                                  <WeekHourCell key={hourIndex} slotDate={slotDate} isPastSlot={isPastSlot} />
                                 );
                               })}
                             </div>
