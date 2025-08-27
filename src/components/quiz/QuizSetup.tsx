@@ -1,0 +1,181 @@
+import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { Brain, FileText, Upload } from "lucide-react";
+
+type QuizRunnerConfig = {
+  source: string;
+  quizType: string;
+  difficulty: string;
+  questionCount: number;
+  timer: number | null; // minutes
+};
+
+interface QuizSetupProps {
+  onStart: (config: QuizRunnerConfig) => void;
+}
+
+export function QuizSetup({ onStart }: QuizSetupProps) {
+  const [source, setSource] = useState("upload");
+  const [quizType, setQuizType] = useState("mcq");
+  const [difficulty, setDifficulty] = useState("medium");
+  const [questionCount, setQuestionCount] = useState([10]);
+  const [timerEnabled, setTimerEnabled] = useState(false);
+  const [timerDuration, setTimerDuration] = useState([30]);
+
+  const handleStartQuiz = () => {
+    const config: QuizRunnerConfig = {
+      source,
+      quizType,
+      difficulty,
+      questionCount: questionCount[0],
+      timer: timerEnabled ? timerDuration[0] : null,
+    };
+    onStart(config);
+  };
+
+  return (
+    <div className="p-6 max-w-3xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-text mb-2">Create Quiz</h1>
+        <p className="text-muted">Configure your quiz settings and start learning</p>
+      </div>
+
+      <div className="space-y-6">
+        {/* Source Selection */}
+        <Card className="surface-elevated">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Upload className="w-5 h-5" />
+              Content Source
+            </CardTitle>
+            <CardDescription>
+              Choose where to generate quiz questions from
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RadioGroup value={source} onValueChange={setSource}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="upload" id="upload" />
+                <Label htmlFor="upload">Upload new content</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="last" id="last" />
+                <Label htmlFor="last">Last uploaded image</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="history" id="history" />
+                <Label htmlFor="history">From history</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="text" id="text" />
+                <Label htmlFor="text">Paste text content</Label>
+              </div>
+            </RadioGroup>
+          </CardContent>
+        </Card>
+
+        {/* Quiz Configuration */}
+        <Card className="surface-elevated">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="w-5 h-5" />
+              Quiz Configuration
+            </CardTitle>
+            <CardDescription>
+              Customize the quiz type and difficulty
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label>Quiz Type</Label>
+                <Select value={quizType} onValueChange={setQuizType}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mcq">Multiple Choice</SelectItem>
+                    <SelectItem value="short">Short Answer</SelectItem>
+                    <SelectItem value="flashcards">Flashcards</SelectItem>
+                    <SelectItem value="mixed">Mixed Types</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Difficulty Level</Label>
+                <Select value={difficulty} onValueChange={setDifficulty}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="easy">Easy</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="hard">Hard</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label>Number of Questions: {questionCount[0]}</Label>
+              <Slider
+                value={questionCount}
+                onValueChange={setQuestionCount}
+                max={25}
+                min={5}
+                step={5}
+                className="w-full"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Enable Timer</Label>
+                <p className="text-sm text-muted">
+                  Add time pressure to your quiz
+                </p>
+              </div>
+              <Switch
+                checked={timerEnabled}
+                onCheckedChange={setTimerEnabled}
+              />
+            </div>
+
+            {timerEnabled && (
+              <div className="space-y-3">
+                <Label>Time Limit: {timerDuration[0]} minutes</Label>
+                <Slider
+                  value={timerDuration}
+                  onValueChange={(v) => {
+                    // Enforce minimum of 2 minutes
+                    const clamped = Math.max(2, v[0] ?? 2);
+                    setTimerDuration([clamped]);
+                  }}
+                  max={120}
+                  min={2}
+                  step={1}
+                  className="w-full"
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Button 
+          onClick={handleStartQuiz}
+          className="w-full h-12 text-lg font-medium"
+          size="lg"
+        >
+          Start Quiz
+        </Button>
+      </div>
+    </div>
+  );
+}

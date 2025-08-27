@@ -1,0 +1,69 @@
+{
+  "quizId": "quiz124",
+  "title": "Thermodynamics First Law Quiz - Part 2",
+  "difficulty": "Medium",
+  "totalQuestions": 5,
+  "createdAt": "2025-08-26T10:00:00Z",
+  "questions": [
+    {
+      "id": "q6",
+      "type": "mcq",
+      "question": "Which of the following is a state function?",
+      "options": [
+        "Work (W)",
+        "Heat (Q)",
+        "Internal Energy (U)",
+        "Power (P)"
+      ],
+      "correctAnswer": 2,
+      "explanation": "Internal energy is a state function; it depends only on the state of the system, not the path."
+    },
+    {
+      "id": "q7",
+      "type": "short-answer",
+      "question": "Explain why heat and work are not state functions.",
+      "correctAnswer": "Because they depend on the path taken during a process, not just the initial and final states.",
+      "explanation": "Heat and work are process-dependent quantities, unlike state functions which depend only on the current state."
+    },
+    {
+      "id": "q8",
+      "type": "mcq",
+      "question": "A system loses 50J of heat and has 20J of work done on it. What is the change in internal energy ΔU?",
+      "options": ["-70J", "-30J", "30J", "70J"],
+      "correctAnswer": 1,
+      "explanation": "ΔU = Q - W. Here Q = -50J (lost), W = -20J (done on system? carefully), so ΔU = -50 - (-20) = -30J"
+    },
+    {
+      "id": "q9",
+      "type": "flashcard",
+      "question": "Define a closed system.",
+      "options": [
+        "Exchanges energy and matter",
+        "Exchanges only energy, not matter",
+        "Exchanges only matter, not energy",
+        "Exchanges neither energy nor matter"
+      ],
+      "correctAnswer": 1,
+      "explanation": "A closed system can exchange energy (heat/work) with surroundings but not matter."
+    },
+    {
+      "id": "q10",
+      "type": "mcq",
+      "question": "Which quantity is positive when heat is added to a system?",
+      "options": [
+        "Q",
+        "ΔU",
+        "W",
+        "Entropy"
+      ],
+      "correctAnswer": 0,
+      "explanation": "Heat added to the system (Q) is considered positive according to the sign convention."
+    }
+  ],
+  "metadata": {
+    "subject": "Physics",
+    "topic": "Thermodynamics",
+    "createdBy": "student123",
+    "tags": ["first-law", "internal-energy", "heat", "work"]
+  }
+}
