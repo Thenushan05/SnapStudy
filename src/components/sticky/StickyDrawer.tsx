@@ -128,7 +128,7 @@ export function StickyDrawer({ open, onClose }: StickyDrawerProps) {
   const DrawerContent = (
     <div
       className={cn(
-        "fixed inset-y-0 right-0 w-full sm:w-[420px] bg-surface border-l border-border shadow-xl transition-transform duration-300 z-60",
+        "fixed inset-y-0 right-0 w-full sm:w-[420px] bg-surface border-l border-border shadow-xl transition-transform duration-300 z-[80] pointer-events-auto",
         open ? "translate-x-0" : "translate-x-full"
       )}
       role="dialog"
@@ -256,7 +256,7 @@ export function StickyDrawer({ open, onClose }: StickyDrawerProps) {
       <div
         ref={overlayRef}
         className={cn(
-          "fixed inset-0 bg-black/30 transition-opacity duration-300 z-[55]",
+          "fixed inset-0 bg-black/30 transition-opacity duration-300 z-[70]",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={onClose}
