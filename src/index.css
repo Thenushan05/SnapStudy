@@ -133,11 +133,13 @@
 
   html {
     scroll-behavior: smooth;
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-bg text-text font-sans antialiased;
     background: var(--gradient-surface);
+    overflow-x: hidden;
   }
 
   /* Typography system */

@@ -128,28 +128,28 @@ export function StickyDrawer({ open, onClose }: StickyDrawerProps) {
   const DrawerContent = (
     <div
       className={cn(
-        "fixed inset-y-0 right-0 w-full sm:w-[420px] bg-surface border-l border-border shadow-xl transition-transform duration-300 z-50",
+        "fixed inset-y-0 right-0 w-full sm:w-[420px] bg-surface border-l border-border shadow-xl transition-transform duration-300 z-60",
         open ? "translate-x-0" : "translate-x-full"
       )}
       role="dialog"
       aria-modal="true"
     >
-      <div className="h-16 px-4 border-b border-border flex items-center justify-between">
+      <div className="px-3 sm:px-4 py-3 border-b border-border flex flex-wrap items-center gap-2 justify-between">
         <div className="font-semibold">Sticky Notes</div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
           <Input
             placeholder="Search notes..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="h-9 w-40"
+            className="h-9 w-28 xs:w-36 sm:w-40 flex-1 min-w-[120px]"
           />
-          <Button size="sm" variant="outline" onClick={refresh} className="gap-2">
+          <Button size="sm" variant="outline" onClick={refresh} className="gap-2 whitespace-nowrap">
             <RefreshCw className="w-4 h-4" />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
-          <Button size="sm" onClick={addNote} className="gap-2">
+          <Button size="sm" onClick={addNote} className="gap-2 whitespace-nowrap">
             <Plus className="w-4 h-4" />
-            Add
+            <span className="hidden sm:inline">Add</span>
           </Button>
           <Button size="icon" variant="ghost" onClick={onClose} aria-label="Close">
             <X className="w-4 h-4" />
@@ -157,7 +157,7 @@ export function StickyDrawer({ open, onClose }: StickyDrawerProps) {
         </div>
       </div>
 
-      <div className="p-4 space-y-3 overflow-auto h-[calc(100vh-4rem)] thin-scroll" onDrop={onDrop}>
+      <div className="p-3 sm:p-4 space-y-3 overflow-auto h-[calc(100vh-4rem)] thin-scroll" onDrop={onDrop}>
         {filtered.length === 0 && (
           <div className="text-sm text-muted">No notes yet. Click Add or use chat → Add to Sticky Notes.</div>
         )}
@@ -256,7 +256,7 @@ export function StickyDrawer({ open, onClose }: StickyDrawerProps) {
       <div
         ref={overlayRef}
         className={cn(
-          "fixed inset-0 bg-black/30 transition-opacity duration-300 z-40",
+          "fixed inset-0 bg-black/30 transition-opacity duration-300 z-[55]",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={onClose}

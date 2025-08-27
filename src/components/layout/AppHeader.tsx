@@ -44,6 +44,17 @@ export function AppHeader({ onOpenSticky }: AppHeaderProps) {
 
         {/* Actions */}
         <div className="flex items-center gap-2 ml-auto">
+          {/* Mobile sticky notes trigger */}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onOpenSticky}
+            className="sm:hidden"
+            aria-label="Open Sticky Notes"
+          >
+            <StickyNote className="w-4 h-4" />
+          </Button>
+
           <Button
             variant="outline"
             size="sm"

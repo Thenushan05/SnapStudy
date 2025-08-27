@@ -313,15 +313,15 @@ export default function StudyPlanPage() {
   }, [form.start, weekEndHour]);
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">My Study Plan</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">My Study Plan</h1>
           <p className="text-muted">Organize your learning schedule effectively</p>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Date range quick pickers */}
           <div className="hidden md:flex items-center gap-2">
             <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9" />
@@ -349,7 +349,7 @@ export default function StudyPlanPage() {
                 <Input id="title" placeholder="e.g., Math Revision - Algebra" value={form.title} onChange={(e) => setForm(f => ({...f, title: e.target.value}))} />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="subject">Subject</Label>
                   <Select value={form.subject} onValueChange={(v) => setForm(f => ({...f, subject: v}))}>
@@ -372,7 +372,7 @@ export default function StudyPlanPage() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="date">Start Date & Time</Label>
                   <Input
@@ -430,13 +430,13 @@ export default function StudyPlanPage() {
                       </SelectContent>
                     </Select>
 
-                    <span className="ml-2 text-xs text-muted-foreground">Total: {form.duration || 0} min</span>
+                    <span className="ml-2 text-xs text-muted">Total: {form.duration || 0} min</span>
                   </div>
                   <div className="mt-1 text-xs text-muted">Max available: {Math.floor(maxDuration/60)}h {maxDuration%60}m (until {endCapLabel})</div>
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Color</Label>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -523,12 +523,12 @@ export default function StudyPlanPage() {
       <div>
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
                 <CardTitle className="text-2xl">Study Calendar</CardTitle>
                 <p className="text-sm text-muted mt-1">Plan and track your learning journey</p>
               </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "week" | "month")}>
                     <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger value="week">Week</TabsTrigger>
@@ -574,65 +574,55 @@ export default function StudyPlanPage() {
                 <p className="text-xs text-muted mt-2">{weeklyCompletedMinutes} / {weeklyPlannedMinutes} min done this week</p>
               </div>
             </CardHeader>
-            
             <CardContent>
-              {viewMode === "month" ? (
-                <div className="space-y-4">
-                  {/* Month Navigation */}
-                  <div className="flex items-center justify-between">
-                    <Button variant="ghost" size="sm" className="gap-2" onClick={() => setSelectedDate(addMonths(selectedDate, -1))}>
-                      <ChevronLeft className="w-4 h-4" />
-                      Previous
-                    </Button>
-                    <h3 className="font-semibold text-lg">
-                      {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                    </h3>
-                    <Button variant="ghost" size="sm" className="gap-2" onClick={() => setSelectedDate(addMonths(selectedDate, 1))}>
-                      Next
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  
-                  {/* Calendar Grid */}
-                  <div className="grid grid-cols-7 gap-1">
-                    {/* Day Headers */}
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                      <div key={day} className="p-2 text-center text-sm font-medium text-muted border-b">
-                        {day}
-                      </div>
-                    ))}
+              <div className="overflow-x-hidden">
+                {viewMode === 'month' ? (
+                  <div className="space-y-4">
+                    {/* Month Navigation */}
+                    <div className="flex items-center justify-between">
+                      <Button variant="ghost" size="sm" className="gap-2" onClick={() => setSelectedDate(addMonths(selectedDate, -1))}>
+                        <ChevronLeft className="w-4 h-4" />
+                        Previous
+                      </Button>
+                      <h3 className="font-semibold text-lg">
+                        {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      </h3>
+                      <Button variant="ghost" size="sm" className="gap-2" onClick={() => setSelectedDate(addMonths(selectedDate, 1))}>
+                        Next
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
                     
-                    {/* Calendar Days */}
-                    {Array.from({ length: 35 }, (_, i) => {
-                      const date = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), i - 6);
-                      const isCurrentMonth = date.getMonth() === selectedDate.getMonth();
-                      const isToday = date.toDateString() === new Date().toDateString();
-                      const isPastDay = date < todayStart; // entire day in the past
-                      const daysSessions = sessions.filter(s => 
-                        s.startDate.toDateString() === date.toDateString()
-                      );
-                      
-                      return (
-                        <div key={i} className={cn(
-                          "min-h-[100px] p-2 border border-border/50 rounded-lg transition-colors",
-                          !isPastDay && "hover:bg-accent/20",
-                          !isCurrentMonth && "text-muted bg-muted/20",
-                          isToday && "ring-2 ring-accent bg-accent/10",
-                          isPastDay && "cb-disabled"
-                        )}
-                         aria-disabled={isPastDay}
-                        onClick={() => {
-                          if (isPastDay) return;
-                          const base = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0);
-                          const nowLocal = new Date();
-                          const addAt = (isToday && base < nowLocal)
-                            ? new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), nowLocal.getHours() + 1, 0)
-                            : base;
-                          openAddWith(addAt);
-                        }}
-                        onPointerDown={(e) => {
-                          // Mirror click for better mobile support
-                          if (e.pointerType === 'touch') {
+                    {/* Calendar Grid (7 columns with horizontal scroll on mobile to preserve alignment) */}
+                    <div className="overflow-x-auto">
+                      <div className="grid grid-cols-7 gap-1 min-w-[700px] sm:min-w-0 px-2 sm:px-0">
+                        {/* Day Headers */}
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                          <div key={day} className="p-2 text-center text-xs sm:text-sm font-medium text-muted border-b">
+                            {day}
+                          </div>
+                        ))}
+                        
+                        {/* Calendar Days */}
+                        {Array.from({ length: 35 }, (_, i) => {
+                        const date = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), i - 6);
+                        const isCurrentMonth = date.getMonth() === selectedDate.getMonth();
+                        const isToday = date.toDateString() === new Date().toDateString();
+                        const isPastDay = date < todayStart; // entire day in the past
+                        const daysSessions = sessions.filter(s => 
+                          s.startDate.toDateString() === date.toDateString()
+                        );
+                        
+                        return (
+                          <div key={i} className={cn(
+                              "min-h-[84px] sm:min-h-[100px] p-2 border border-border/50 rounded-lg transition-colors",
+                              !isPastDay && "hover:bg-accent/20",
+                              !isCurrentMonth && "text-muted bg-muted/20",
+                              isToday && "ring-2 ring-accent bg-accent/10",
+                              isPastDay && "cb-disabled"
+                            )}
+                            aria-disabled={isPastDay}
+                            onClick={() => {
                             if (isPastDay) return;
                             const base = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0);
                             const nowLocal = new Date();
@@ -640,32 +630,44 @@ export default function StudyPlanPage() {
                               ? new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), nowLocal.getHours() + 1, 0)
                               : base;
                             openAddWith(addAt);
-                          }
-                        }}
-                        >
-                          <div className="text-sm font-medium mb-1">{date.getDate()}</div>
-                          <div className="space-y-1">
-                            {daysSessions.slice(0, 3).map(session => (
-                              <div key={session.id} className={cn(
-                                "text-[11px] p-1 rounded text-white font-medium truncate cursor-pointer border shadow-sm",
-                                !session.color && subjectColor(session.subject)
-                              )} style={session.color ? { backgroundColor: session.color } : undefined} onClick={(e) => { e.stopPropagation(); openDetails(session.id); }}>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="truncate">{session.emoji ? `${session.emoji} ` : ''}{session.subject}</span>
-                                  <span className={cn("w-2 h-2 rounded-full", session.status === 'completed' ? 'bg-white' : 'bg-white/60')} />
+                          }}
+                          onPointerDown={(e) => {
+                            // Mirror click for better mobile support
+                            if (e.pointerType === 'touch') {
+                              if (isPastDay) return;
+                              const base = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9, 0);
+                              const nowLocal = new Date();
+                              const addAt = (isToday && base < nowLocal)
+                                ? new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), nowLocal.getHours() + 1, 0)
+                                : base;
+                              openAddWith(addAt);
+                            }
+                          }}
+                          >
+                            <div className="text-sm font-medium mb-1">{date.getDate()}</div>
+                            <div className="space-y-1">
+                              {daysSessions.slice(0, 3).map(session => (
+                                <div key={session.id} className={cn(
+                                  "text-[11px] p-1 rounded text-white font-medium truncate cursor-pointer border shadow-sm",
+                                  !session.color && subjectColor(session.subject)
+                                )} style={session.color ? { backgroundColor: session.color } : undefined} onClick={(e) => { e.stopPropagation(); openDetails(session.id); }}>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="truncate">{session.emoji ? `${session.emoji} ` : ''}{session.subject}</span>
+                                    <span className={cn("w-2 h-2 rounded-full", session.status === 'completed' ? 'bg-white' : 'bg-white/60')} />
+                                  </div>
+                                  <div className="truncate opacity-90">{session.topic}</div>
+                                  <div className="opacity-90 text-[10px]">{formatRange(session.startDate, session.duration)}</div>
                                 </div>
-                                <div className="truncate opacity-90">{session.topic}</div>
-                                <div className="opacity-90 text-[10px]">{formatRange(session.startDate, session.duration)}</div>
-                              </div>
-                            ))}
-                            {daysSessions.length > 3 && (
-                              <div className="text-xs text-muted">+{daysSessions.length - 3} more</div>
-                            )}
+                              ))}
+                              {daysSessions.length > 3 && (
+                                <div className="text-xs text-muted">+{daysSessions.length - 3} more</div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -683,7 +685,8 @@ export default function StudyPlanPage() {
                   </div>
                   
                   {/* Week Grid */}
-              <div className="overflow-x-auto -mx-2 sm:mx-0 pb-2">
+              <div className="overflow-x-auto pb-2">
+                <div className="md:hidden px-2 pb-1 text-xs text-muted">Swipe horizontally to view all days</div>
                 <div className="grid grid-cols-8 gap-2 min-w-[960px] sm:min-w-0 px-2 sm:px-0">
                   {/* Time Column */}
                   <div className="space-y-2 border-r border-border/60">
@@ -783,6 +786,8 @@ export default function StudyPlanPage() {
                 </div>
               </div>
               )}
+              {/* Close overflow-x-hidden wrapper */}
+              </div>
               
               {/* Subject Legend */}
               <div className="mt-6 p-4 bg-surface rounded-lg border">
