@@ -26,7 +26,7 @@ export function ChatThread({ messages, isLoading }: ChatThreadProps) {
     return note;
   };
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {messages.map((message, index) => (
         <div
           key={index}

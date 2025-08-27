@@ -119,6 +119,20 @@ export const api = {
     //   return http.post("/mindmap", payload, { signal });
     // },
   },
+  // Minimal image upload API. Expects backend to return { url: string }
+  // Path defaults to "/upload"; adjust as needed to match your server.
+  upload: {
+    async image(form: FormData, opts?: { path?: string; signal?: AbortSignal }): Promise<{ url: string }> {
+      const path = opts?.path ?? "/upload";
+      // If your backend needs a field name, the caller should append under 'file'
+      // e.g., form.append('file', blob, filename)
+      const res = await http.post<{ url: string }>(path, form, { signal: opts?.signal, timeoutMs: 20000 });
+      if (!res || typeof res.url !== "string" || !res.url) {
+        throw new Error("Invalid upload response: missing url");
+      }
+      return res;
+    },
+  },
 } as const;
 
 // Backward-compatible helper

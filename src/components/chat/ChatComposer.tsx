@@ -26,7 +26,7 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
   };
 
   return (
-    <div className="sticky bottom-0 z-40 border-t border-border bg-surface/80 backdrop-blur supports-[backdrop-filter]:bg-surface/70 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface/80 backdrop-blur supports-[backdrop-filter]:bg-surface/70 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="max-w-4xl mx-auto">
         <div className="relative">
           <Textarea

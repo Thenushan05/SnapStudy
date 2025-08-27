@@ -1,23 +1,19 @@
-import { useRef, useState } from "react";
-import { Textarea } from "@/components/ui/textarea";
+import { useRef, useState, useMemo, useEffect } from "react";
+import type Quill from "quill";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { 
-  Bold, 
-  Italic, 
-  List, 
-  ListOrdered, 
-  Heading1, 
-  Heading2,
-  Image,
-  Code,
   Paintbrush,
   Save,
   Clock
 } from "lucide-react";
 import { DrawingCanvas } from "./DrawingCanvas";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 
 interface Note {
   id: string;
@@ -37,12 +33,67 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
   const [content, setContent] = useState(note.content);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [tags, setTags] = useState(note.tags);
+  const [showPreview, setShowPreview] = useState(false);
   const [newTag, setNewTag] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
     onChange(newContent);
+  };
+
+  // Helpers to apply Quill formatting instead of inserting markdown characters
+  const getQuill = (): Quill | undefined => quillRef.current?.getEditor?.();
+  const applyInlineFormat = (name: string, value: boolean | number | string = true) => {
+    const quill = getQuill();
+    if (!quill) return;
+    // Quill typings are permissive at runtime; limit casting locally
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (quill as any).format(name, value, "user");
+    handleContentChange(quill.root.innerHTML);
+  };
+  const applyLineFormat = (name: string, value: boolean | number | string) => {
+    const quill = getQuill();
+    if (!quill) return;
+    const sel = quill.getSelection();
+    const index = sel?.index ?? quill.getLength();
+    const length = sel?.length ?? 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (quill as any).formatLine(index, length || 1, name, value, "user");
+    handleContentChange(quill.root.innerHTML);
+  };
+
+  // Export current content to PDF via printable window
+  const exportToPDF = () => {
+    const html = content || getQuill()?.root.innerHTML || "";
+    const win = window.open("", "_blank");
+    if (!win) {
+      toast.error("Popup blocked. Please allow popups to export PDF.");
+      return;
+    }
+    const doc = win.document;
+    doc.open();
+    doc.write(`<!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>${title ? `${title} - Notes` : "Notes"}</title>
+          <style>
+            body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; margin: 24px; color: #111; }
+            h1,h2,h3 { page-break-after: avoid; }
+            img { max-width: 100%; height: auto; page-break-inside: avoid; }
+            pre, code { white-space: pre-wrap; word-wrap: break-word; }
+            @page { margin: 16mm; }
+          </style>
+        </head>
+        <body>
+          ${title ? `<h1>${title.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</h1>` : ""}
+          <div>${html}</div>
+          <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 250); };</script>
+        </body>
+      </html>`);
+    doc.close();
   };
 
   const insertText = (text: string) => {
@@ -109,6 +160,60 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
 
+  // Quill toolbar/modules
+  const quillModules = useMemo(() => ({
+    toolbar: {
+      container: "#notes-quill-toolbar",
+      handlers: {
+        draw: function () {
+          setIsDrawingMode((v) => !v);
+        },
+      },
+    },
+  }), []);
+
+  const quillRef = useRef<ReactQuill | null>(null);
+
+  // One-time cleanup: remove legacy placeholder like "# New Note Start writing..." from old markdown design
+  useEffect(() => {
+    const legacy = /^#?\s*New\s+Note(?:\s+Start\s+writing.*)?$/i;
+    const stripLegacy = (html: string) => {
+      const div = document.createElement("div");
+      div.innerHTML = html || "";
+      // If the first block is a paragraph that matches the legacy placeholder, remove it
+      const first = div.firstElementChild as HTMLElement | null;
+      if (first && first.tagName === "P") {
+        const txt = (first.textContent || "").trim().replace(/\s+/g, " ");
+        if (legacy.test(txt)) {
+          first.remove();
+        }
+      }
+      // Also handle case where the entire content equals the placeholder
+      const allTxt = (div.textContent || "").trim().replace(/\s+/g, " ");
+      if (legacy.test(allTxt)) return "";
+      return div.innerHTML;
+    };
+    const cleaned = stripLegacy(content);
+    if (cleaned !== content) handleContentChange(cleaned);
+    // run only once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const clearTextKeepImages = () => {
+    const quill = quillRef.current?.getEditor?.();
+    const container = document.createElement("div");
+    container.innerHTML = content || "";
+    const imgs = Array.from(container.querySelectorAll("img"));
+    const html = imgs.map((img) => `<p>${img.outerHTML}</p>`).join("");
+    if (quill) {
+      quill.clipboard.dangerouslyPasteHTML(html);
+      handleContentChange(quill.root.innerHTML);
+    } else {
+      handleContentChange(html);
+    }
+    toast.success("Removed notes text. Kept drawings/images.");
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Editor Header */}
@@ -153,137 +258,147 @@ export function NotesEditor({ note, onChange }: NotesEditorProps) {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="border-b border-border bg-surface p-2">
-        <div className="flex flex-wrap items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => wrapSelection("**", "**", "bold")}
-            className="w-8 h-8"
-          >
-            <Bold className="w-4 h-4" />
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => wrapSelection("*", "*", "italic")}
-            className="w-8 h-8"
-          >
-            <Italic className="w-4 h-4" />
-          </Button>
-          
-          <Separator orientation="vertical" className="h-6 mx-1" />
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => insertLinePrefix("# ", "heading")}
-            className="w-8 h-8"
-          >
-            <Heading1 className="w-4 h-4" />
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => insertLinePrefix("## ", "heading")}
-            className="w-8 h-8"
-          >
-            <Heading2 className="w-4 h-4" />
-          </Button>
-          
-          <Separator orientation="vertical" className="h-6 mx-1" />
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => insertLinePrefix("- ", "list item")}
-            className="w-8 h-8"
-          >
-            <List className="w-4 h-4" />
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => insertLinePrefix("1. ", "list item")}
-            className="w-8 h-8"
-          >
-            <ListOrdered className="w-4 h-4" />
-          </Button>
-          
-          <Separator orientation="vertical" className="h-6 mx-1" />
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => wrapSelection("`", "`", "code")}
-            className="w-8 h-8"
-          >
-            <Code className="w-4 h-4" />
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => insertText("![alt text](image-url)")}
-            className="w-8 h-8"
-          >
-            <Image className="w-4 h-4" />
-          </Button>
-          
-          <Separator orientation="vertical" className="h-6 mx-1" />
-          
-          <Button
-            variant={isDrawingMode ? "default" : "ghost"}
-            size="icon"
-            onClick={() => setIsDrawingMode(!isDrawingMode)}
-            className="w-8 h-8"
-          >
-            <Paintbrush className="w-4 h-4" />
-          </Button>
-          
-          <div className="flex-1" />
-          
-          <Button variant="outline" size="sm" className="gap-2">
-            <Save className="w-4 h-4" />
-            Save
-          </Button>
-        </div>
+      {/* Top Controls */}
+      <div className="border-b border-border bg-surface p-2 flex items-center gap-2">
+        <div className="flex-1" />
+        <Button
+          variant={showPreview ? "default" : "outline"}
+          size="sm"
+          className="gap-2 mr-2"
+          onClick={() => setShowPreview(v => !v)}
+        >
+          Preview
+        </Button>
+        <Button variant="outline" size="sm" className="gap-2 mr-2" onClick={clearTextKeepImages}>
+          Clear Text
+        </Button>
+        <Button variant="outline" size="sm" className="gap-2" onClick={exportToPDF}>
+          <Save className="w-4 h-4" />
+          Save
+        </Button>
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 flex flex-col md:flex-row">
-        {/* Markdown Editor */}
+      <div className="flex-1 flex flex-col md:flex-row min-h-[60vh] md:min-h-0">
+        {/* Rich Text Editor (Quill) */}
         <div className={`${isDrawingMode ? "md:w-1/2 w-full" : "w-full"} flex flex-col`}>
-          <Textarea
-            value={content}
-            onChange={(e) => handleContentChange(e.target.value)}
-            ref={textareaRef}
-            placeholder="Start writing your notes in Markdown..."
-            className="flex-1 resize-none border-none rounded-none font-mono text-sm leading-relaxed focus-visible:ring-0"
-          />
+          {/* Dark mode friendly placeholder color for Quill */}
+          <style>{`
+            .ql-editor.ql-blank::before { color: rgba(0,0,0,0.45); }
+            .dark .ql-editor.ql-blank::before { color: rgba(255,255,255,0.6); }
+          `}</style>
+          {/* Quill Toolbar (single, default panel) */}
+          <div id="notes-quill-toolbar" className="border-b border-border p-2 flex items-center gap-1">
+            <span className="ql-formats">
+              <button className="ql-bold" />
+              <button className="ql-italic" />
+            </span>
+            <span className="ql-formats">
+              <button className="ql-header" value="1" />
+              <button className="ql-header" value="2" />
+            </span>
+            <span className="ql-formats">
+              <button className="ql-list" value="ordered" />
+              <button className="ql-list" value="bullet" />
+            </span>
+            <span className="ql-formats">
+              <button className="ql-code-block" />
+              <button className="ql-image" />
+              {/* Custom draw toggle button inside the same toolbar */}
+              <button className="ql-draw" aria-label="Toggle drawing">
+                <Paintbrush className="w-4 h-4" />
+              </button>
+            </span>
+          </div>
+          <div className="flex-1 min-h-[45vh] md:min-h-0">
+            <ReactQuill
+              ref={quillRef}
+              theme="snow"
+              value={content}
+              onChange={(val) => handleContentChange(val)}
+              modules={quillModules}
+              placeholder="Start writing your notes..."
+              className="h-[45vh] md:h-full"
+            />
+          </div>
+
+          {showPreview && (
+            <div className="border-t border-border bg-surface p-3 md:p-4">
+              <div className="prose prose-sm max-w-none space-y-2">
+                {/* Render the Quill HTML content */}
+                <div dangerouslySetInnerHTML={{ __html: content }} />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Drawing Canvas */}
         {isDrawingMode && (
           <div className="md:w-1/2 w-full md:border-l border-border md:border-t-0 border-t">
             <DrawingCanvas
-              onInsert={(dataUrl) => {
+              onInsert={async (dataUrl) => {
                 const ta = textareaRef.current;
-                if (!ta) return;
-                const start = ta.selectionStart ?? content.length;
-                const end = ta.selectionEnd ?? content.length;
-                const imageMd = `\n\n![drawing](${dataUrl})\n`;
-                const newContent = content.slice(0, start) + imageMd + content.slice(end);
-                handleContentChange(newContent);
-                requestAnimationFrame(() => {
-                  const pos = start + imageMd.length;
-                  ta.setSelectionRange(pos, pos);
-                  ta.focus();
-                });
+                // We'll prefer inserting via Quill; textarea fallback retained for safety
+                const quill = quillRef.current?.getEditor?.();
+                const selection = quill?.getSelection();
+                try {
+                  // Convert data URL to Blob using fetch for simplicity and reliability
+                  const uploadingId = `upload-${Date.now()}`;
+                  toast("Uploading drawing…", { id: uploadingId });
+                  const blob = await (await fetch(dataUrl)).blob();
+                  const fileName = `drawing-${Date.now()}.png`;
+                  const form = new FormData();
+                  form.append("file", blob, fileName);
+
+                  // Upload to server; backend should respond with { url }
+                  const { url } = await api.upload.image(form);
+
+                  if (quill) {
+                    // Insert image embed at current selection
+                    const index = selection?.index ?? quill.getLength();
+                    quill.insertEmbed(index, "image", url, "user");
+                    quill.setSelection(index + 1, 0, "user");
+                    // Sync content state with new HTML
+                    handleContentChange(quill.root.innerHTML);
+                  } else if (ta) {
+                    // Fallback: insert an <img> tag into the plain string
+                    const start = ta.selectionStart ?? content.length;
+                    const end = ta.selectionEnd ?? content.length;
+                    const before = content.slice(0, start);
+                    const after = content.slice(end);
+                    const imageHtml = `<p><img src="${url}" alt="drawing" /></p>`;
+                    const newContent = before + imageHtml + after;
+                    handleContentChange(newContent);
+                    requestAnimationFrame(() => {
+                      const pos = (before + imageHtml).length;
+                      ta.setSelectionRange(pos, pos);
+                      ta.focus();
+                    });
+                  }
+                  toast.success("Drawing uploaded and inserted", { id: uploadingId });
+                } catch (err: unknown) {
+                  console.error("Upload failed", err);
+                  toast.error("Failed to upload drawing. Inserting as embedded Base64.");
+                  if (quill) {
+                    const index = quill.getSelection()?.index ?? quill.getLength();
+                    quill.insertEmbed(index, "image", dataUrl, "user");
+                    quill.setSelection(index + 1, 0, "user");
+                    handleContentChange(quill.root.innerHTML);
+                  } else if (ta) {
+                    const start = ta.selectionStart ?? content.length;
+                    const end = ta.selectionEnd ?? content.length;
+                    const before = content.slice(0, start);
+                    const after = content.slice(end);
+                    const imageHtml = `<p><img src="${dataUrl}" alt="drawing" /></p>`;
+                    const newContent = before + imageHtml + after;
+                    handleContentChange(newContent);
+                    requestAnimationFrame(() => {
+                      const pos = (before + imageHtml).length;
+                      ta.setSelectionRange(pos, pos);
+                      ta.focus();
+                    });
+                  }
+                }
               }}
             />
           </div>
