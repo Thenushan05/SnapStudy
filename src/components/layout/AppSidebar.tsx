@@ -70,7 +70,7 @@ export function AppSidebar() {
   return (
     <Sidebar 
       collapsible="icon"
-      className="border-r border-border bg-surface"
+      className="mt-14 sm:mt-16 border-r border-border bg-surface"
     >
       <SidebarContent className="gap-0">
         <SidebarGroup>

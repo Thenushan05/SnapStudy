@@ -26,7 +26,7 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
   };
 
   return (
-    <div className="border-t border-border bg-surface/80 backdrop-blur-sm p-4">
+    <div className="sticky bottom-0 z-40 border-t border-border bg-surface/80 backdrop-blur supports-[backdrop-filter]:bg-surface/70 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="max-w-4xl mx-auto">
         <div className="relative">
           <Textarea
@@ -35,14 +35,14 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             disabled={disabled}
-            className="min-h-[60px] pr-20 resize-none focus-ring"
+            className="min-h-[52px] sm:min-h-[60px] pr-16 sm:pr-24 resize-none focus-ring"
           />
           
-          <div className="absolute bottom-3 right-3 flex gap-2">
+          <div className="absolute bottom-2 sm:bottom-3 right-2 sm:right-3 flex gap-1.5 sm:gap-2">
             <Button
               variant="ghost"
               size="icon"
-              className="w-8 h-8"
+              className="w-8 h-8 hidden sm:inline-flex"
               disabled={disabled}
             >
               <Paperclip className="w-4 h-4" />
@@ -51,7 +51,7 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="w-8 h-8"
+              className="w-8 h-8 hidden sm:inline-flex"
               disabled={disabled}
             >
               <Mic className="w-4 h-4" />
@@ -61,14 +61,14 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
               onClick={handleSend}
               disabled={!message.trim() || disabled}
               size="icon"
-              className="w-8 h-8"
+              className="w-10 h-10 sm:w-8 sm:h-8"
             >
               <Send className="w-4 h-4" />
             </Button>
           </div>
         </div>
         
-        <div className="mt-2 text-xs text-muted">
+        <div className="mt-1.5 sm:mt-2 text-[11px] sm:text-xs text-muted">
           Press Enter to send, Shift+Enter for new line
         </div>
       </div>

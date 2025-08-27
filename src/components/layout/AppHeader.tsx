@@ -17,66 +17,68 @@ export function AppHeader({ onOpenSticky }: AppHeaderProps) {
   };
 
   return (
-    <header className="h-16 flex items-center gap-4 px-4 border-b border-border bg-surface/80 backdrop-blur-sm">
-      <SidebarTrigger />
-      
-      {/* Logo */}
-      <div className="flex items-center gap-2 font-semibold text-lg">
-        <img
-          src="/Snapstudy.png"
-          alt="SnapStudy logo"
-          className="w-8 h-8 rounded-lg select-none object-contain"
-          loading="eager"
-          decoding="async"
-        />
-        <span className="hidden sm:inline text-text">SnapStudy</span>
-      </div>
+    <header className="fixed top-0 left-0 right-0 z-50 h-14 sm:h-16 border-b border-border bg-surface/80 backdrop-blur supports-[backdrop-filter]:bg-surface/70">
+      <div className="w-full max-w-7xl mx-auto h-full flex items-center gap-3 px-3 sm:px-4">
+        <SidebarTrigger />
 
-      {/* Search Bar */}
-      <div className="flex-1 max-w-md relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted w-4 h-4" />
-        <Input
-          placeholder="Search or ask anything..."
-          className="pl-10 bg-surface border-border focus-ring"
-        />
-      </div>
+        {/* Logo */}
+        <div className="flex items-center gap-2 font-semibold text-lg">
+          <img
+            src="/Snapstudy.png"
+            alt="SnapStudy logo"
+            className="w-8 h-8 rounded-lg select-none object-contain"
+            loading="eager"
+            decoding="async"
+          />
+          <span className="hidden sm:inline text-text">SnapStudy</span>
+        </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onOpenSticky}
-          className="gap-2"
-        >
-          <StickyNote className="w-4 h-4" />
-          <span className="hidden sm:inline">Sticky Notes</span>
-        </Button>
+        {/* Search Bar */}
+        <div className="flex-1 max-w-md relative hidden xs:flex">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted w-4 h-4" />
+          <Input
+            placeholder="Search or ask anything..."
+            className="pl-10 bg-surface border-border focus-ring"
+          />
+        </div>
 
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={toggleTheme}
-          className="focus-ring"
-        >
-          {theme === "dark" ? (
-            <Sun className="w-4 h-4" />
-          ) : (
-            <Moon className="w-4 h-4" />
-          )}
-        </Button>
+        {/* Actions */}
+        <div className="flex items-center gap-2 ml-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenSticky}
+            className="gap-2 hidden sm:flex"
+          >
+            <StickyNote className="w-4 h-4" />
+            <span className="hidden sm:inline">Sticky Notes</span>
+          </Button>
 
-        <Button variant="default" size="sm" className="gap-2">
-          <Upload className="w-4 h-4" />
-          <span className="hidden sm:inline">Upload</span>
-        </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={toggleTheme}
+            className="focus-ring"
+          >
+            {theme === "dark" ? (
+              <Sun className="w-4 h-4" />
+            ) : (
+              <Moon className="w-4 h-4" />
+            )}
+          </Button>
 
-        <Avatar className="w-8 h-8">
-          <AvatarImage src="" />
-          <AvatarFallback>
-            <User className="w-4 h-4" />
-          </AvatarFallback>
-        </Avatar>
+          <Button variant="default" size="sm" className="gap-2 hidden sm:flex">
+            <Upload className="w-4 h-4" />
+            <span className="hidden sm:inline">Upload</span>
+          </Button>
+
+          <Avatar className="w-8 h-8">
+            <AvatarImage src="" />
+            <AvatarFallback>
+              <User className="w-4 h-4" />
+            </AvatarFallback>
+          </Avatar>
+        </div>
       </div>
     </header>
   );

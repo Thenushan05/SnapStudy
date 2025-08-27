@@ -43,7 +43,7 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-full">
       {messages.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center p-8">
+        <div className="flex-1 flex items-center justify-center p-6 sm:p-8 pb-24">
           <div className="max-w-2xl w-full">
             <div className="text-center mb-8">
               <h1 className="text-4xl font-bold text-text mb-4 text-balance">
@@ -62,7 +62,7 @@ export default function ChatPage() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pb-24 px-3 sm:px-4">
           <ChatThread messages={messages} isLoading={isLoading} />
         </div>
       )}

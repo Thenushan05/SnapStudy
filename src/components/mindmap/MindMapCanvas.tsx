@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, useCallback } from "react";
 
 export interface Node {
   id: string;
@@ -13,6 +13,8 @@ export interface Node {
 interface MindMapCanvasProps {
   onNodeSelect: (nodeId: string | null) => void;
   nodes?: Node[];
+  editable?: boolean;
+  onNodesChange?: (nodes: Node[]) => void;
   options?: {
     autoLayout?: boolean;
     spacingX?: number; // horizontal spacing between siblings
@@ -46,10 +48,23 @@ const mockNodes: Node[] = [
   { id: "7", label: "x = (-b ± √(b²-4ac))/2a", x: 600, y: 100, level: 2, children: [], parent: "4" },
 ];
 
-export function MindMapCanvas({ onNodeSelect, nodes: externalNodes, options }: MindMapCanvasProps) {
+export type MindMapCanvasHandle = {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetView: () => void;
+  fullscreen: () => void;
+  exportImage: () => void;
+};
+
+export const MindMapCanvas = forwardRef<MindMapCanvasHandle, MindMapCanvasProps>(function MindMapCanvas({ onNodeSelect, nodes: externalNodes, editable, onNodesChange, options }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const baseNodes: Node[] = externalNodes && externalNodes.length ? externalNodes : mockNodes;
+  const latestNodesRef = useRef<Node[]>(baseNodes);
+  useEffect(() => {
+    latestNodesRef.current = baseNodes;
+  }, [baseNodes]);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const draggingRef = useRef<{ dragging: boolean; x: number; y: number } | null>(null);
@@ -121,6 +136,36 @@ export function MindMapCanvas({ onNodeSelect, nodes: externalNodes, options }: M
     // Clear canvas
     ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
 
+    // Background grid (dotted) for visual guidance
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    const gridSize = 24;
+    ctx.fillStyle = '#e2e8f0'; // slate-200 dots
+    for (let gx = 0; gx < canvas.offsetWidth; gx += gridSize) {
+      for (let gy = 0; gy < canvas.offsetHeight; gy += gridSize) {
+        ctx.beginPath();
+        ctx.arc(gx + 0.5, gy + 0.5, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    // Soft radial vignette
+    ctx.save();
+    const rad = ctx.createRadialGradient(
+      canvas.offsetWidth / 2,
+      canvas.offsetHeight / 2,
+      0,
+      canvas.offsetWidth / 2,
+      canvas.offsetHeight / 2,
+      Math.max(canvas.offsetWidth, canvas.offsetHeight) / 1.2
+    );
+    rad.addColorStop(0, 'rgba(59,130,246,0.06)'); // blue-500 tint
+    rad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = rad;
+    ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
+    ctx.restore();
+
     // Apply transformations
     ctx.save();
     ctx.translate(offset.x, offset.y);
@@ -130,7 +175,6 @@ export function MindMapCanvas({ onNodeSelect, nodes: externalNodes, options }: M
     boxMapRef.current.clear();
 
     // Draw connections first
-    ctx.strokeStyle = cfg.palette.edge;
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.globalAlpha = 0.9;
@@ -143,6 +187,11 @@ export function MindMapCanvas({ onNodeSelect, nodes: externalNodes, options }: M
           ctx.beginPath();
           ctx.moveTo(node.x, node.y);
           ctx.quadraticCurveTo(mx, node.y, child.x, child.y);
+          // gradient edge color for visual appeal
+          const grad = ctx.createLinearGradient(node.x, node.y, child.x, child.y);
+          grad.addColorStop(0, '#60a5fa'); // blue-400
+          grad.addColorStop(1, '#22d3ee'); // cyan-400
+          ctx.strokeStyle = grad;
           ctx.stroke();
           // arrowhead at child
           const angle = Math.atan2(child.y - node.y, child.x - node.x);
@@ -152,6 +201,7 @@ export function MindMapCanvas({ onNodeSelect, nodes: externalNodes, options }: M
           ctx.lineTo(child.x - ah * Math.cos(angle - Math.PI / 6), child.y - ah * Math.sin(angle - Math.PI / 6));
           ctx.moveTo(child.x, child.y);
           ctx.lineTo(child.x - ah * Math.cos(angle + Math.PI / 6), child.y - ah * Math.sin(angle + Math.PI / 6));
+          ctx.strokeStyle = '#22d3ee';
           ctx.stroke();
         }
       });
@@ -163,6 +213,9 @@ export function MindMapCanvas({ onNodeSelect, nodes: externalNodes, options }: M
     nodes.forEach(node => {
       const isSelected = selectedNode === node.id;
       const isRoot = node.level === 0;
+      // level-based accent emojis already used; tweak palette per level for students
+      const levelColors = ['#3b82f6', '#22c55e', '#f59e0b', '#a78bfa'];
+      const levelBorders = ['#1d4ed8', '#16a34a', '#d97706', '#7c3aed'];
       const icon = isRoot ? '🧠' : node.level === 1 ? '🗂️' : '📄';
       const iconSize = 14;
       const iconGap = 6;
@@ -189,12 +242,12 @@ export function MindMapCanvas({ onNodeSelect, nodes: externalNodes, options }: M
         grad.addColorStop(1, 'rgba(255,255,255,0.1)');
         fill = grad;
       }
-      const stroke = isRoot ? cfg.palette.rootBorder : isSelected ? cfg.palette.selectedBorder : cfg.palette.nodeBorder;
+      const stroke = isRoot ? cfg.palette.rootBorder : isSelected ? cfg.palette.selectedBorder : (levelBorders[node.level % levelBorders.length] ?? cfg.palette.nodeBorder);
 
       // shadow
       ctx.save();
-      ctx.shadowColor = 'rgba(2, 6, 23, 0.08)';
-      ctx.shadowBlur = 12;
+      ctx.shadowColor = isSelected ? 'rgba(34, 211, 238, 0.5)' : 'rgba(2, 6, 23, 0.08)';
+      ctx.shadowBlur = isSelected ? 20 : 12;
       ctx.shadowOffsetY = 4;
       roundRect(ctx, x, y, boxW, boxH, r);
       ctx.fillStyle = fill as string | CanvasGradient;
@@ -231,10 +284,9 @@ export function MindMapCanvas({ onNodeSelect, nodes: externalNodes, options }: M
   }, [nodes, selectedNode, scale, offset, cfg]);
 
   // Fit-to-screen when nodes change
-  useEffect(() => {
+  const fitToNodes = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (didFitRef.current) return;
     if (!nodes.length) return;
     const pad = 80;
     const xs = nodes.map(n => n.x);
@@ -249,12 +301,19 @@ export function MindMapCanvas({ onNodeSelect, nodes: externalNodes, options }: M
     const sY = canvas.offsetHeight / height;
     const fit = Math.max(0.4, Math.min(1.2, Math.min(sX, sY)));
     setScale(fit);
-    // center
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     setOffset({ x: canvas.offsetWidth / 2 - cx * fit, y: canvas.offsetHeight / 2 - cy * fit });
-    didFitRef.current = true;
   }, [nodes]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (didFitRef.current) return;
+    if (!nodes.length) return;
+    fitToNodes();
+    didFitRef.current = true;
+  }, [nodes, fitToNodes]);
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -283,30 +342,115 @@ export function MindMapCanvas({ onNodeSelect, nodes: externalNodes, options }: M
   const handleWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
     event.preventDefault();
     const delta = event.deltaY > 0 ? 0.9 : 1.1;
-    setScale(prev => Math.max(0.5, Math.min(2, prev * delta)));
+    setScale(prev => Math.max(0.4, Math.min(2.5, prev * delta)));
+  };
+
+  const dragNodeRef = useRef<{ id: string; lastX: number; lastY: number } | null>(null);
+
+  const getWorldCoords = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left - offset.x) / scale;
+    const y = (clientY - rect.top - offset.y) / scale;
+    return { x, y };
   };
 
   const onMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    draggingRef.current = { dragging: true, x: event.clientX, y: event.clientY };
+    const { x, y } = getWorldCoords(event.clientX, event.clientY);
+    let hitNode: string | null = null;
+    for (const node of nodes) {
+      const box = boxMapRef.current.get(node.id);
+      if (!box) continue;
+      if (x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) {
+        hitNode = node.id;
+        break;
+      }
+    }
+    if (editable && hitNode) {
+      dragNodeRef.current = { id: hitNode, lastX: x, lastY: y };
+    } else {
+      draggingRef.current = { dragging: true, x: event.clientX, y: event.clientY };
+    }
   };
   const onMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (editable && dragNodeRef.current) {
+      const { x, y } = getWorldCoords(event.clientX, event.clientY);
+      const dx = x - dragNodeRef.current.lastX;
+      const dy = y - dragNodeRef.current.lastY;
+      dragNodeRef.current.lastX = x;
+      dragNodeRef.current.lastY = y;
+      // Update the node position and notify parent
+      const updated = latestNodesRef.current.map(n => n.id === dragNodeRef.current!.id ? { ...n, x: n.x + dx, y: n.y + dy } : n);
+      onNodesChange?.(updated);
+      return;
+    }
     if (!draggingRef.current?.dragging) return;
-    const dx = event.clientX - draggingRef.current.x;
-    const dy = event.clientY - draggingRef.current.y;
+    const dxp = event.clientX - draggingRef.current.x;
+    const dyp = event.clientY - draggingRef.current.y;
     draggingRef.current.x = event.clientX;
     draggingRef.current.y = event.clientY;
-    setOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+    setOffset(prev => ({ x: prev.x + dxp, y: prev.y + dyp }));
   };
   const onMouseUp = () => {
     if (draggingRef.current) draggingRef.current.dragging = false;
+    if (dragNodeRef.current) dragNodeRef.current = null;
   };
 
+  // Imperative API for toolbar
+  useImperativeHandle(ref, () => ({
+    zoomIn: () => setScale((s) => Math.min(2.5, s * 1.1)),
+    zoomOut: () => setScale((s) => Math.max(0.4, s / 1.1)),
+    resetView: () => {
+      didFitRef.current = true;
+      fitToNodes();
+    },
+    fullscreen: () => {
+      const el = containerRef.current;
+      if (el && el.requestFullscreen) el.requestFullscreen();
+    },
+    exportImage: () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const url = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mindmap-${Date.now()}.png`;
+      a.click();
+    }
+  }), [fitToNodes]);
+
   return (
-    <div className="w-full h-full bg-surface border border-border rounded-lg overflow-hidden">
+    <div ref={containerRef} className="w-full h-full bg-surface border border-border rounded-lg overflow-hidden">
       <canvas
         ref={canvasRef}
         className="w-full h-full cursor-pointer"
         onClick={handleCanvasClick}
+        onDoubleClick={(e) => {
+          if (!editable) return;
+          const { x, y } = (function() {
+            const rect = canvasRef.current!.getBoundingClientRect();
+            const wx = (e.clientX - rect.left - offset.x) / scale;
+            const wy = (e.clientY - rect.top - offset.y) / scale;
+            return { x: wx, y: wy };
+          })();
+          let hit: string | null = null;
+          for (const node of nodes) {
+            const box = boxMapRef.current.get(node.id);
+            if (!box) continue;
+            if (x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) {
+              hit = node.id;
+              break;
+            }
+          }
+          if (hit) {
+            const current = latestNodesRef.current.find(n => n.id === hit);
+            const nextLabel = window.prompt("Rename node", current?.label ?? "");
+            if (nextLabel && nextLabel.trim()) {
+              const updated = latestNodesRef.current.map(n => n.id === hit ? { ...n, label: nextLabel.trim() } : n);
+              onNodesChange?.(updated);
+            }
+          }
+        }}
         onWheel={handleWheel}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
@@ -315,7 +459,7 @@ export function MindMapCanvas({ onNodeSelect, nodes: externalNodes, options }: M
       />
     </div>
   );
-}
+});
 
 // Helpers
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

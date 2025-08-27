@@ -18,7 +18,7 @@ export function AppShell({ children }: AppShellProps) {
       <div className="min-h-screen flex w-full gradient-bg">
         <AppSidebar />
         
-        <div className="flex-1 flex flex-col relative">
+        <div className="flex-1 flex flex-col relative pt-14 sm:pt-16">
           <AppHeader onOpenSticky={() => setStickyOpen(true)} />
           
           <main className="flex-1 overflow-hidden">

@@ -8,13 +8,22 @@ import {
   Plus, 
   Brain, 
   FileQuestion,
-  BookOpen,
   Maximize
 } from "lucide-react";
 
+type MindMapAction =
+  | "zoom-in"
+  | "zoom-out"
+  | "reset-view"
+  | "fullscreen"
+  | "export"
+  | "add-node"
+  | "expand-with-ai"
+  | "create-quiz";
+
 interface MindMapToolbarProps {
   selectedNodeId: string | null;
-  onAction: (action: string, data?: any) => void;
+  onAction: (action: MindMapAction, data?: string) => void;
 }
 
 export function MindMapToolbar({ selectedNodeId, onAction }: MindMapToolbarProps) {
@@ -103,15 +112,7 @@ export function MindMapToolbar({ selectedNodeId, onAction }: MindMapToolbarProps
                   Create Quiz
                 </Button>
                 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onAction("add-to-notes", selectedNodeId)}
-                  className="gap-2"
-                >
-                  <BookOpen className="w-4 h-4" />
-                  Add to Notes
-                </Button>
+                {/* Removed Add to Notes */}
               </>
             )}
           </div>

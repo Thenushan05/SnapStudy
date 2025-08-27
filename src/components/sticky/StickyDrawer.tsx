@@ -149,7 +149,7 @@ export function StickyDrawer({ open, onClose }: StickyDrawerProps) {
           </Button>
           <Button size="sm" onClick={addNote} className="gap-2">
             <Plus className="w-4 h-4" />
-            Add
+            Create New
           </Button>
           <Button size="icon" variant="ghost" onClick={onClose} aria-label="Close">
             <X className="w-4 h-4" />
