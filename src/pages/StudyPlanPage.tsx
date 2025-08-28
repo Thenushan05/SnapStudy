@@ -7,8 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { 
@@ -19,8 +18,7 @@ import {
   Plus, 
   Edit, 
   Trash2, 
-  Sun, 
-  Moon,
+  
   Target,
   TrendingUp,
   Lightbulb,
@@ -61,9 +59,8 @@ export default function StudyPlanPage() {
   const visibleHours = Math.max(0, weekEndHour - weekStartHour);
   // Max duration allowed based on selected start time and visible hour range
   const [maxDuration, setMaxDuration] = useState<number>(24 * 60);
-  const [dateFrom, setDateFrom] = useState<string>("");
-  const [dateTo, setDateTo] = useState<string>("");
   const [formError, setFormError] = useState<string>("");
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   // UI options
   const colorOptions = [
@@ -472,22 +469,7 @@ export default function StudyPlanPage() {
         </div>
         
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Date range quick pickers */}
-          <div className="hidden md:flex items-center gap-2">
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9" />
-            <span className="text-muted text-sm">to</span>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-9" />
-          </div>
-          <Button variant="outline" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme">
-            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </Button>
           <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              Add Plan
-            </Button>
-          </DialogTrigger>
           <DialogContent className="sm:max-w-md w-screen sm:w-auto max-h-[90dvh] overflow-y-auto sm:rounded-lg rounded-none p-4 sm:p-6">
             <DialogHeader>
               <DialogTitle>{editingId ? 'Edit Study Session' : 'Add Study Session'}</DialogTitle>
@@ -1159,23 +1141,113 @@ export default function StudyPlanPage() {
       {selectedSession && (
         <div role="dialog" aria-modal="true" className={cn("fixed inset-0 z-50", isDetailsOpen ? '' : 'hidden')}>
           <div className="absolute inset-0 bg-black/40" onClick={() => setIsDetailsOpen(false)} />
-          <div className="absolute right-0 top-0 h-full w-full max-w-md bg-background border-l shadow-xl p-6 overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Session Details</h3>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => { setIsDetailsOpen(false); openEdit(selectedSession.id); }}>Edit</Button>
-                <Button variant="outline" size="sm" onClick={() => setIsDetailsOpen(false)}>Close</Button>
+          <div className="absolute right-0 top-0 h-full w-full max-w-md bg-background border-l shadow-xl overflow-y-auto">
+            {/* Header */}
+            <div
+              className="p-6 border-b bg-gradient-to-br from-accent/10 to-background"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={cn('w-2.5 h-2.5 rounded-full', subjectColor(selectedSession.subject))} aria-hidden />
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted">{selectedSession.subject}</span>
+                  </div>
+                  <h3 className="text-xl font-semibold truncate">
+                    {selectedSession.emoji ? `${selectedSession.emoji} ` : ''}{selectedSession.title}
+                  </h3>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span className={cn('px-2 py-0.5 rounded-full capitalize', getPriorityColor(selectedSession.priority))}>{selectedSession.priority} priority</span>
+                    <span className={cn('px-2 py-0.5 rounded-full capitalize border', getStatusColor(selectedSession.status))}>{selectedSession.status}</span>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" aria-label="Close details" onClick={() => setIsDetailsOpen(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
               </div>
             </div>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-2"><span className={cn('w-2.5 h-2.5 rounded-full', subjectColor(selectedSession.subject))} aria-hidden /> <span className="font-medium">{selectedSession.title}</span></div>
-              <div><span className="text-muted">Subject:</span> {selectedSession.subject}</div>
-              <div><span className="text-muted">Topic:</span> {selectedSession.topic}</div>
-              <div><span className="text-muted">Date:</span> {selectedSession.startDate.toLocaleString()}</div>
-              <div><span className="text-muted">Duration:</span> {selectedSession.duration} min</div>
-              <div><span className="text-muted">Priority:</span> {selectedSession.priority}</div>
-              <div><span className="text-muted">Status:</span> {selectedSession.status}</div>
-              {selectedSession.notes && <div><span className="text-muted">Notes:</span> {selectedSession.notes}</div>}
+
+            {/* Body */}
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-1 gap-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4 text-muted" />
+                  <span className="text-muted">When:</span>
+                  <span className="font-medium">{selectedSession.startDate.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-muted" />
+                  <span className="text-muted">Duration:</span>
+                  <span className="font-medium">{selectedSession.duration} min</span>
+                </div>
+                {selectedSession.topic && (
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-muted" />
+                    <span className="text-muted">Topic:</span>
+                    <span className="font-medium truncate">{selectedSession.topic}</span>
+                  </div>
+                )}
+                {selectedSession.notes && (
+                  <div className="rounded-lg border p-3 bg-surface">
+                    <div className="text-xs text-muted mb-1">Notes</div>
+                    <div className="text-sm whitespace-pre-wrap">{selectedSession.notes}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button className="gap-2" onClick={() => { setIsDetailsOpen(false); openEdit(selectedSession.id); }}>
+                  <Edit className="w-4 h-4" />
+                  Edit
+                </Button>
+                {selectedSession.status !== 'completed' && (
+                  <Button variant="secondary" className="gap-2" onClick={() => { markComplete(selectedSession.id); }}>
+                    <CheckCircle className="w-4 h-4" />
+                    Mark complete
+                  </Button>
+                )}
+                <Button
+                  variant="destructive"
+                  className="gap-2 ml-auto"
+                  onClick={() => setIsDeleteOpen(true)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete
+                </Button>
+                <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>Close</Button>
+              </div>
+              {/* Delete Confirmation Dialog */}
+              <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Delete session?</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3 text-sm">
+                    <p className="text-muted">This action cannot be undone.</p>
+                    <div className="rounded-lg border p-3 bg-surface">
+                      <div className="text-xs text-muted mb-1">Session</div>
+                      <div className="font-medium truncate">
+                        {selectedSession.emoji ? `${selectedSession.emoji} ` : ''}{selectedSession.title}
+                      </div>
+                      <div className="text-xs text-muted mt-1 truncate">{selectedSession.subject} • {selectedSession.startDate.toLocaleString()}</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        deleteSession(selectedSession.id);
+                        setIsDeleteOpen(false);
+                        setIsDetailsOpen(false);
+                        setEditingId(null);
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>

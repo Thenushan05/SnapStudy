@@ -3,7 +3,6 @@ import type Quill from "quill";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { 
   Paintbrush,
   Save,
@@ -42,7 +41,6 @@ export function NotesEditor({
   const [content, setContent] = useState(note.content);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [tags, setTags] = useState(note.tags);
-  const [showPreview, setShowPreview] = useState(false);
   const [newTag, setNewTag] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -330,6 +328,17 @@ export function NotesEditor({
 
       {/* Top Controls */}
       <div className="border-b border-border bg-surface p-2 flex items-center gap-2 overflow-x-hidden">
+        {/* Draw at left start */}
+        <Button
+          variant={isDrawingMode ? "default" : "outline"}
+          size="sm"
+          className="gap-2"
+          onClick={() => setIsDrawingMode(v => !v)}
+          aria-pressed={isDrawingMode}
+        >
+          <Paintbrush className="w-4 h-4" />
+          Draw
+        </Button>
         <div className="flex-1 text-xs text-muted">
           {lastSavedAt ? `Saved ${lastSavedAt.toLocaleTimeString()}` : ""}
         </div>
@@ -343,14 +352,7 @@ export function NotesEditor({
           <Save className="w-4 h-4" />
           {isSaving ? "Saving…" : "Save"}
         </Button>
-        <Button
-          variant={showPreview ? "default" : "outline"}
-          size="sm"
-          className="gap-2 mr-2"
-          onClick={() => setShowPreview(v => !v)}
-        >
-          Preview
-        </Button>
+        
         <Button variant="outline" size="sm" className="gap-2 mr-2" onClick={clearTextKeepImages}>
           Clear Text
         </Button>
@@ -410,14 +412,7 @@ export function NotesEditor({
             />
           </div>
 
-          {showPreview && (
-            <div className="border-t border-border bg-surface p-3 md:p-4 overflow-x-hidden">
-              <div className="prose prose-sm max-w-none space-y-2 break-words">
-                {/* Render the Quill HTML content */}
-                <div dangerouslySetInnerHTML={{ __html: content }} />
-              </div>
-            </div>
-          )}
+          
         </div>
 
         {/* Drawing Canvas */}
