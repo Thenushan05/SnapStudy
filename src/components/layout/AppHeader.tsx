@@ -1,9 +1,10 @@
-import { Search, Upload, Sun, Moon, User, StickyNote } from "lucide-react";
+import { Search, Upload, Sun, Moon, User, StickyNote, Menu } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+ 
 
 interface AppHeaderProps {
   onOpenSticky?: () => void;
@@ -43,7 +44,10 @@ export function AppHeader({ onOpenSticky }: AppHeaderProps) {
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 ml-auto min-w-0">
+        <div className="ml-auto flex items-center gap-4">
+          <Button asChild>
+            <Link to="/login">Login</Link>
+          </Button>
           {/* Mobile sticky notes trigger */}
           <Button
             variant="outline"
@@ -78,17 +82,8 @@ export function AppHeader({ onOpenSticky }: AppHeaderProps) {
             )}
           </Button>
 
-          <Button variant="default" size="sm" className="gap-2 hidden sm:flex">
-            <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">Upload</span>
-          </Button>
+          
 
-          <Avatar className="w-8 h-8">
-            <AvatarImage src="" />
-            <AvatarFallback>
-              <User className="w-4 h-4" />
-            </AvatarFallback>
-          </Avatar>
         </div>
       </div>
     </header>

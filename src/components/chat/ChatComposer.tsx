@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Paperclip, Mic } from "lucide-react";
+import { Send, Paperclip, Mic, Camera } from "lucide-react";
 
 interface ChatComposerProps {
   onSend: (message: string) => void;
+  onUpload: (files: File[]) => void;
   disabled?: boolean;
 }
 
@@ -14,7 +15,10 @@ const PLACEHOLDERS = [
   "Attach an image to analyze",
 ];
 
-export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
+export function ChatComposer({ onSend, onUpload, disabled }: ChatComposerProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
   const [message, setMessage] = useState("");
   const [phText, setPhText] = useState("");
   const [phIndex, setPhIndex] = useState(0);
@@ -60,6 +64,20 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
     }
   };
 
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      onUpload(Array.from(event.target.files));
+    }
+  };
+
+  const handleCameraClick = () => {
+    cameraInputRef.current?.click();
+  };
+
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-surface/80 backdrop-blur supports-[backdrop-filter]:bg-surface/70 p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="max-w-4xl mx-auto">
@@ -73,14 +91,40 @@ export function ChatComposer({ onSend, disabled }: ChatComposerProps) {
             className="min-h-[52px] sm:min-h-[60px] pr-16 sm:pr-24 resize-none focus-ring"
           />
           
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            multiple
+            accept="image/*,application/pdf"
+          />
+          <input
+            type="file"
+            ref={cameraInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept="image/*"
+            capture="environment"
+          />
           <div className="absolute bottom-2 sm:bottom-3 right-2 sm:right-3 flex gap-1.5 sm:gap-2">
             <Button
               variant="ghost"
               size="icon"
               className="w-8 h-8 hidden sm:inline-flex"
               disabled={disabled}
+              onClick={handleUploadClick}
             >
               <Paperclip className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-8 h-8"
+              disabled={disabled}
+              onClick={handleCameraClick}
+            >
+              <Camera className="w-4 h-4" />
             </Button>
             
             <Button

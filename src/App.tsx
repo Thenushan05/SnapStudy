@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "./providers/ThemeProvider";
+import { AuthProvider } from "./providers/AuthProvider";
 import { AppShell } from "./components/layout/AppShell";
 
 // Pages
@@ -16,6 +17,8 @@ import StickyNotesPage from "./pages/StickyNotesPage";
 import StudyPlanPage from "./pages/StudyPlanPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
 
 const queryClient = new QueryClient();
 
@@ -26,20 +29,24 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <AppShell>
+          <AuthProvider>
             <Routes>
-              <Route path="/" element={<ChatPage />} />
-              <Route path="/history" element={<HistoryPage />} />
-              <Route path="/quiz" element={<QuizPage />} />
-              <Route path="/mindmap" element={<MindMapPage />} />
-              <Route path="/notes" element={<NotesPage />} />
-              <Route path="/sticky-notes" element={<StickyNotesPage />} />
-              <Route path="/study-plan" element={<StudyPlanPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route element={<AppShell />}>
+                <Route path="/" element={<ChatPage />} />
+                <Route path="/history" element={<HistoryPage />} />
+                <Route path="/quiz" element={<QuizPage />} />
+                <Route path="/mindmap" element={<MindMapPage />} />
+                <Route path="/notes" element={<NotesPage />} />
+                <Route path="/sticky-notes" element={<StickyNotesPage />} />
+                <Route path="/study-plan" element={<StudyPlanPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </AppShell>
+          </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>

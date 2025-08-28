@@ -1,15 +1,13 @@
 import { useState } from "react";
+import { Outlet } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { StickyDrawer } from "@/components/sticky/StickyDrawer";
 import { cn } from "@/lib/utils";
 
-interface AppShellProps {
-  children: React.ReactNode;
-}
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [stickyOpen, setStickyOpen] = useState(false);
 
@@ -22,7 +20,7 @@ export function AppShell({ children }: AppShellProps) {
           <AppHeader onOpenSticky={() => setStickyOpen(true)} />
           
           <main className="flex-1 overflow-hidden">
-            {children}
+            <Outlet />
           </main>
 
           <StickyDrawer open={stickyOpen} onClose={() => setStickyOpen(false)} />

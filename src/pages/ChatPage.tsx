@@ -8,37 +8,6 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const STORAGE_KEY = "chat.thread.v1";
 
-  // Load chat from localStorage on mount
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed: unknown = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          type UnknownMessage = { type: "user" | "assistant"; content: string; timestamp?: string | Date };
-          const revived: Message[] = (parsed as UnknownMessage[])
-            .filter((m) => m && (m.type === "user" || m.type === "assistant") && typeof m.content === "string")
-            .map((m) => ({
-              type: m.type,
-              content: m.content,
-              timestamp: m.timestamp ? new Date(m.timestamp) : undefined,
-            }));
-          setMessages(revived);
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to load chat from storage", e);
-    }
-  }, []);
-
-  // Persist chat on changes
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-    } catch (e) {
-      console.warn("Failed to save chat to storage", e);
-    }
-  }, [messages]);
 
   return (
     <div className="flex flex-col h-full">
@@ -55,8 +24,21 @@ export default function ChatPage() {
             </div>
             <UploadDropzone 
               onUpload={(files) => {
-                // Handle file upload
-                console.log("Files uploaded:", files);
+                if (files.length === 0) return;
+
+                const fileMessage = `You have uploaded: ${files.map(f => f.name).join(', ')}`;
+                setMessages(prev => [...prev, { type: "user", content: fileMessage, timestamp: new Date() }]);
+                setIsLoading(true);
+
+                // Simulate AI response after a short delay
+                setTimeout(() => {
+                  setMessages(prev => [...prev, { 
+                    type: "assistant", 
+                    content: "Thank you for uploading your notes. I will now analyze them. What would you like me to do? For example, you can ask me to summarize the content, create a quiz, or generate a mind map.",
+                    timestamp: new Date(),
+                  }]);
+                  setIsLoading(false);
+                }, 1000);
               }}
             />
           </div>
@@ -76,6 +58,23 @@ export default function ChatPage() {
             setMessages(prev => [...prev, { 
               type: "assistant", 
               content: "I'd be happy to help you with that! Please upload an image of your notes so I can analyze them and provide summaries, explanations, or create quizzes.",
+              timestamp: new Date(),
+            }]);
+            setIsLoading(false);
+          }, 1000);
+        }}
+        onUpload={(files) => {
+          if (files.length === 0) return;
+
+          const fileMessage = `You have uploaded: ${files.map(f => f.name).join(', ')}`;
+          setMessages(prev => [...prev, { type: "user", content: fileMessage, timestamp: new Date() }]);
+          setIsLoading(true);
+
+          // Simulate AI response after a short delay
+          setTimeout(() => {
+            setMessages(prev => [...prev, { 
+              type: "assistant", 
+              content: "Thank you for uploading your notes. I will now analyze them. What would you like me to do? For example, you can ask me to summarize the content, create a quiz, or generate a mind map.",
               timestamp: new Date(),
             }]);
             setIsLoading(false);
