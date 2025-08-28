@@ -1,9 +1,11 @@
-import { Search, Upload, Sun, Moon, User, StickyNote, Menu } from "lucide-react";
+import { Search, Sun, Moon, User, StickyNote } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
  
 
 interface AppHeaderProps {
@@ -45,9 +47,6 @@ export function AppHeader({ onOpenSticky }: AppHeaderProps) {
 
         {/* Actions */}
         <div className="ml-auto flex items-center gap-4">
-          <Button asChild>
-            <Link to="/login">Login</Link>
-          </Button>
           {/* Mobile sticky notes trigger */}
           <Button
             variant="outline"
@@ -82,8 +81,27 @@ export function AppHeader({ onOpenSticky }: AppHeaderProps) {
             )}
           </Button>
 
-          
-
+          {/* Avatar dropdown (last) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="rounded-full border border-border w-8 h-8 overflow-hidden bg-surface focus-ring">
+                <Avatar className="w-8 h-8">
+                  <AvatarImage src="" alt="User" />
+                  <AvatarFallback className="bg-surface">
+                    <User className="w-4 h-4" />
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem>
+                <Link to="/login" className="w-full">Login</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Link to="/settings" className="w-full">Settings</Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
