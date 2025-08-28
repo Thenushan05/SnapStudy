@@ -4,14 +4,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  Plus, 
-  Search, 
-  FileText, 
+import {
+  Plus,
+  Search,
+  FileText,
   Clock,
   Tag,
   SortAsc,
-  Filter
+  Filter,
 } from "lucide-react";
 
 interface Note {
@@ -29,24 +29,25 @@ interface NotesSidebarProps {
   onNoteCreate: () => void;
 }
 
-export function NotesSidebar({ 
-  notes, 
-  selectedNoteId, 
-  onNoteSelect, 
-  onNoteCreate 
+export function NotesSidebar({
+  notes,
+  selectedNoteId,
+  onNoteSelect,
+  onNoteCreate,
 }: NotesSidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   // Get all unique tags
   const allTags = Array.from(
-    new Set(notes.flatMap(note => note.tags))
+    new Set(notes.flatMap((note) => note.tags))
   ).sort();
 
   // Filter notes based on search and tag
-  const filteredNotes = notes.filter(note => {
-    const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         note.content.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredNotes = notes.filter((note) => {
+    const matchesSearch =
+      note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      note.content.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesTag = !selectedTag || note.tags.includes(selectedTag);
     return matchesSearch && matchesTag;
   });
@@ -55,7 +56,7 @@ export function NotesSidebar({
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
+
     if (days === 0) return "Today";
     if (days === 1) return "Yesterday";
     if (days < 7) return `${days} days ago`;
@@ -73,8 +74,8 @@ export function NotesSidebar({
       .replace(/\n+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-    
-    return plainText.length > 100 
+
+    return plainText.length > 100
       ? plainText.substring(0, 100) + "..."
       : plainText;
   };
@@ -139,10 +140,14 @@ export function NotesSidebar({
             <div className="text-center py-8 text-muted">
               <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <p className="text-sm">
-                {searchQuery || selectedTag ? "No notes match your filters" : "No notes yet"}
+                {searchQuery || selectedTag
+                  ? "No notes match your filters"
+                  : "No notes yet"}
               </p>
               <p className="text-xs">
-                {!searchQuery && !selectedTag && "Create your first note to get started"}
+                {!searchQuery &&
+                  !selectedTag &&
+                  "Create your first note to get started"}
               </p>
             </div>
           ) : (
@@ -151,14 +156,15 @@ export function NotesSidebar({
                 key={note.id}
                 className={`
                   cursor-pointer transition-all duration-200 hover:shadow-medium
-                  ${selectedNoteId === note.id 
-                    ? "border-accent bg-accent/5" 
-                    : "border-border hover:border-accent/50"
+                  ${
+                    selectedNoteId === note.id
+                      ? "border-accent bg-accent/5"
+                      : "border-border hover:border-accent/50"
                   }
                 `}
                 onClick={(e) => {
                   e.stopPropagation();
-                  console.log('Note card clicked:', note.id);
+                  console.log("Note card clicked:", note.id);
                   onNoteSelect(note.id);
                 }}
               >
@@ -167,30 +173,31 @@ export function NotesSidebar({
                     <h3 className="font-medium text-text text-sm leading-tight">
                       {note.title}
                     </h3>
-                    
+
                     <p className="text-xs text-muted leading-relaxed">
                       {getPreviewText(note.content)}
                     </p>
-                    
+
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1 text-xs text-muted">
                         <Clock className="w-3 h-3" />
                         {formatDate(note.updatedAt)}
                       </div>
-                      
+
                       {note.tags.length > 0 && (
                         <Badge variant="secondary" className="text-xs h-4 px-1">
-                          {note.tags.length} tag{note.tags.length > 1 ? "s" : ""}
+                          {note.tags.length} tag
+                          {note.tags.length > 1 ? "s" : ""}
                         </Badge>
                       )}
                     </div>
-                    
+
                     {note.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {note.tags.slice(0, 3).map((tag) => (
-                          <Badge 
-                            key={tag} 
-                            variant="outline" 
+                          <Badge
+                            key={tag}
+                            variant="outline"
                             className="text-xs h-4 px-1"
                           >
                             {tag}
