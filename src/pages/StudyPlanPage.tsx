@@ -1217,7 +1217,14 @@ export default function StudyPlanPage() {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(session.id)} aria-label="Edit session">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => openEdit(session.id)}
+                    aria-label="Edit session"
+                    disabled={session.startDate < now}
+                    title={session.startDate < now ? "Cannot edit past sessions" : "Edit session"}
+                  >
                     <Edit className="w-4 h-4" />
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => deleteSession(session.id)} aria-label="Delete session">
@@ -1292,7 +1299,12 @@ export default function StudyPlanPage() {
 
               {/* Actions */}
               <div className="flex flex-wrap gap-2 pt-2">
-                <Button className="gap-2" onClick={() => { setIsDetailsOpen(false); openEdit(selectedSession.id); }}>
+                <Button
+                  className="gap-2"
+                  onClick={() => { setIsDetailsOpen(false); openEdit(selectedSession.id); }}
+                  disabled={selectedSession.startDate < now}
+                  title={selectedSession.startDate < now ? "Cannot edit past sessions" : "Edit session"}
+                >
                   <Edit className="w-4 h-4" />
                   Edit
                 </Button>
