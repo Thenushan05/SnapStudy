@@ -3,7 +3,6 @@ import type Quill from "quill";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { 
   Paintbrush,
   Save,
@@ -42,7 +41,6 @@ export function NotesEditor({
   const [content, setContent] = useState(note.content);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [tags, setTags] = useState(note.tags);
-  const [showPreview, setShowPreview] = useState(false);
   const [newTag, setNewTag] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -73,7 +71,50 @@ export function NotesEditor({
     const toastId = `save-${note.id}`;
     try {
       toast("Saving note…", { id: toastId });
-      await api.notes.save({ id: note.id, title, content, tags });
+      // Convert rich HTML to plain text
+      const toPlainText = (html: string) => {
+        const div = document.createElement("div");
+        div.innerHTML = html || "";
+        const text = (div.textContent || div.innerText || "").replace(/\s+/g, " ").trim();
+        return text;
+      };
+      const contentPlain = toPlainText(content);
+      // Include any pending tag input if user typed but didn't press Add/Enter yet
+      const pending = (newTag || "").trim();
+      const baseTags = Array.isArray(tags) ? tags.map(String) : [];
+      const combined = pending && !baseTags.some(t => t.toLowerCase() === pending.toLowerCase())
+        ? [...baseTags, pending]
+        : baseTags;
+      // de-duplicate case-insensitively
+      const seen = new Set<string>();
+      const tagsOut = combined.filter(t => {
+        const k = t.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      const payload = { id: note.id, title, content: contentPlain, tags: tagsOut };
+      // Debug: verify exact payload being sent
+      console.debug("Saving note payload", payload);
+      const res = await api.notes.save(
+        payload,
+        { path: "/notes/note_123" }
+      );
+      // If server returns updated fields, reflect them locally
+      if (res && typeof res === 'object') {
+        const r = res as Record<string, unknown>;
+        if (typeof r.title === 'string' && r.title !== title) setTitle(r.title);
+        if (typeof r.content === 'string') {
+          // server returns plain text; keep our editor content as-is while reflecting save time
+          // optionally, if you want to mirror server, uncomment next line
+          // setContent(r.content as string);
+        }
+        if (Array.isArray(r.tags)) {
+          setTags((r.tags as unknown[]).map(String));
+        } else if (typeof r.tags === 'string') {
+          setTags(r.tags.split(',').map(s => s.trim()).filter(Boolean));
+        }
+      }
       setLastSavedAt(new Date());
       toast.success("Note saved", { id: toastId });
     } catch (err) {
@@ -82,7 +123,7 @@ export function NotesEditor({
     } finally {
       setIsSaving(false);
     }
-  }, [isSaving, note.id, title, content, tags]);
+  }, [isSaving, note.id, title, content, tags, newTag]);
 
   // Keyboard shortcut: Ctrl/Cmd+S to save
   useEffect(() => {
@@ -316,7 +357,12 @@ export function NotesEditor({
               <Input
                 value={newTag}
                 onChange={(e) => setNewTag(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && addTag()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addTag();
+                  }
+                }}
                 placeholder="Add tag..."
                 className="w-20 h-6 text-xs"
               />
@@ -330,6 +376,17 @@ export function NotesEditor({
 
       {/* Top Controls */}
       <div className="border-b border-border bg-surface p-2 flex items-center gap-2 overflow-x-hidden">
+        {/* Draw at left start */}
+        <Button
+          variant={isDrawingMode ? "default" : "outline"}
+          size="sm"
+          className="gap-2"
+          onClick={() => setIsDrawingMode(v => !v)}
+          aria-pressed={isDrawingMode}
+        >
+          <Paintbrush className="w-4 h-4" />
+          Draw
+        </Button>
         <div className="flex-1 text-xs text-muted">
           {lastSavedAt ? `Saved ${lastSavedAt.toLocaleTimeString()}` : ""}
         </div>
@@ -343,14 +400,7 @@ export function NotesEditor({
           <Save className="w-4 h-4" />
           {isSaving ? "Saving…" : "Save"}
         </Button>
-        <Button
-          variant={showPreview ? "default" : "outline"}
-          size="sm"
-          className="gap-2 mr-2"
-          onClick={() => setShowPreview(v => !v)}
-        >
-          Preview
-        </Button>
+        
         <Button variant="outline" size="sm" className="gap-2 mr-2" onClick={clearTextKeepImages}>
           Clear Text
         </Button>
@@ -410,14 +460,7 @@ export function NotesEditor({
             />
           </div>
 
-          {showPreview && (
-            <div className="border-t border-border bg-surface p-3 md:p-4 overflow-x-hidden">
-              <div className="prose prose-sm max-w-none space-y-2 break-words">
-                {/* Render the Quill HTML content */}
-                <div dangerouslySetInnerHTML={{ __html: content }} />
-              </div>
-            </div>
-          )}
+          
         </div>
 
         {/* Drawing Canvas */}
@@ -435,11 +478,11 @@ export function NotesEditor({
                   toast("Uploading drawing…", { id: uploadingId });
                   const blob = await (await fetch(dataUrl)).blob();
                   const fileName = `drawing-${Date.now()}.png`;
-                  const form = new FormData();
-                  form.append("file", blob, fileName);
-
-                  // Upload to server; backend should respond with { url }
-                  const { url } = await api.upload.image(form);
+                  // Upload to server using correct field name via helper
+                  const up = await api.upload.imageFile(new File([blob], fileName, { type: "image/png" }));
+                  const url = up.image.url;
+                  const imageId = up.image.id;
+                  if (imageId) sessionStorage.setItem("lastImageId", imageId);
 
                   if (quill) {
                     // Insert image embed at current selection

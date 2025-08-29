@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MindMapCanvas, type Node as MindMapNode, type MindMapCanvasHandle } from "@/components/mindmap/MindMapCanvas";
 import { MindMapToolbar } from "@/components/mindmap/MindMapToolbar";
-import { getMindMap } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,20 @@ export default function MindMapPage() {
     y: number;
     level: number;
   } | null>(null);
+  const [currentImageId, setCurrentImageId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  // Auto-fit after data loads the first time
+  const didAutoFitRef = useRef(false);
+  useEffect(() => {
+    if (didAutoFitRef.current) return;
+    if ((nodes?.length ?? 0) > 0 && canvasRef.current) {
+      didAutoFitRef.current = true;
+      // Small delay to ensure canvas DOM has dimensions
+      requestAnimationFrame(() => canvasRef.current?.resetView());
+    }
+  }, [nodes]);
 
   // Keep renameValue in sync when editing an existing node
   useEffect(() => {
@@ -74,8 +88,20 @@ export default function MindMapPage() {
       try {
         setLoading(true);
         setError(null);
-        const data = await getMindMap(ac.signal);
-        setNodes(data);
+        // Resolve imageId from sessionStorage (prefer lastImageId, then imageId)
+        const keys = ["lastImageId", "imageId"] as const;
+        let imageId: string | null = null;
+        for (const k of keys) {
+          const v = sessionStorage.getItem(k);
+          if (v && v.trim()) { imageId = v; break; }
+        }
+        if (!imageId) throw new Error("No imageId found in session — upload content first.");
+        setCurrentImageId(imageId);
+        // Call backend to generate+fetch the mind map for this image
+        const data = await api.mindmap.byImage(imageId, ac.signal);
+        // Debug: log parsed nodes length
+        console.log("[MindMap] parsed nodes", Array.isArray(data) ? data.length : "?", data);
+        setNodes(data as unknown as MindMapNode[]);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load mind map");
         setNodes(null);
@@ -87,57 +113,96 @@ export default function MindMapPage() {
   }, []);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <MindMapToolbar 
         selectedNodeId={selectedNodeId}
         onAction={(action, data) => {
-          const api = canvasRef.current;
+          const canvas = canvasRef.current;
           switch (action) {
             case "zoom-in":
-              api?.zoomIn();
+              canvas?.zoomIn();
               break;
             case "zoom-out":
-              api?.zoomOut();
+              canvas?.zoomOut();
               break;
             case "reset-view":
-              api?.resetView();
+              canvas?.resetView();
               break;
             case "fullscreen":
-              api?.fullscreen();
+              canvas?.fullscreen();
               break;
             case "export":
-              api?.exportImage();
+              canvas?.exportImage();
               break;
-            case "add-node": {
-              const list = nodes ?? [];
-              const anchor = selectedNodeId ? list.find(n => n.id === selectedNodeId) : undefined;
-              const x = anchor ? anchor.x + 180 : 0;
-              const y = anchor ? anchor.y + 60 : 0;
-              const level = anchor ? (anchor.level + 1) : 0;
-              setPendingAdd({ parentId: anchor?.id, x, y, level });
-              setRenameTargetId("__new__");
-              setRenameValue("");
-              setRenameOpen(true);
+            case "add-node":
+              {
+                const list = nodes ?? [];
+                if (list.length === 0) break;
+                // Prefer selected as parent, else try root (level 0), else first node
+                const parent = (selectedNodeId ? list.find(n => n.id === selectedNodeId) : null)
+                  ?? list.find(n => n.level === 0)
+                  ?? list[0];
+                const spacingX =  Math.max(160,  (280));
+                const spacingY =  Math.max(80,   (140 / 2));
+                const siblingCount = parent.children?.length ?? 0;
+                const nx = parent.x + spacingX; // to the right of parent
+                const ny = parent.y + (siblingCount - Math.floor(siblingCount / 2)) * spacingY * 0.6;
+                setPendingAdd({ parentId: parent.id, x: nx, y: ny, level: (parent.level ?? 0) + 1 });
+                setRenameTargetId("__new__");
+                setRenameValue("");
+                setRenameOpen(true);
+              }
               break;
-            }
-            case "delete-node": {
-              const target = data || selectedNodeId;
-              if (!target) break;
-              setDeleteTargetId(target);
-              setDeleteOpen(true);
+            case "delete-node":
+              if (data) {
+                setDeleteTargetId(data);
+                setDeleteOpen(true);
+              }
               break;
-            }
+            case "save":
+              (async () => {
+                if (!currentImageId) {
+                  setSaveMessage("No image in context to save");
+                  setTimeout(() => setSaveMessage(null), 2500);
+                  return;
+                }
+                try {
+                  setSaving(true);
+                  const res = await api.mindmap.save(currentImageId, nodes ?? []);
+                  setSaveMessage(res.message ?? "Saved");
+                } catch (e) {
+                  setSaveMessage(e instanceof Error ? e.message : "Save failed");
+                } finally {
+                  setSaving(false);
+                  setTimeout(() => setSaveMessage(null), 2500);
+                }
+              })();
+              break;
+            case "expand-with-ai":
+              if (data) {
+                console.log("Mind map action:", action, data);
+              }
+              break;
+            case "create-quiz":
+              if (data) {
+                console.log("Mind map action:", action, data);
+              }
+              break;
             default:
               console.log("Mind map action:", action);
           }
         }}
       />
       
-      <div className="flex-1 relative">
+      <div className="flex-1 relative" style={{ minHeight: 'calc(100vh - 112px)' }}>
         {loading ? (
           <div className="w-full h-full flex items-center justify-center text-muted text-sm">Loading mind map…</div>
         ) : error ? (
           <div className="w-full h-full flex items-center justify-center text-destructive text-sm">{error}</div>
+        ) : ((nodes?.length ?? 0) === 0 ? (
+          <div className="w-full h-full flex items-center justify-center text-muted text-sm">
+            No topics found in mind map.
+          </div>
         ) : (
           <MindMapCanvas 
             ref={canvasRef}
@@ -152,8 +217,13 @@ export default function MindMapPage() {
               setRenameOpen(true);
               setSelectedNodeId(id);
             }}
-            options={{ autoLayout: false }}
+            options={{ autoLayout: false, layout: 'layered', spacingX: 280, spacingY: 140, maxNodeWidth: 260, fullBleed: true, canvasMinWidth: 1200 }}
           />
+        ))}
+        {saveMessage && (
+          <div className="absolute top-3 right-3 rounded bg-surface border border-border px-3 py-1 text-sm shadow">
+            {saving ? "Saving… " : null}{saveMessage}
+          </div>
         )}
       </div>
 

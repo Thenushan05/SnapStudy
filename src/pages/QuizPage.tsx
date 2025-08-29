@@ -35,7 +35,28 @@ export default function QuizPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await quizApi.get();
+      const getQuizImageId = (): string | null => {
+        // 1) Explicit quiz selection
+        const selected = sessionStorage.getItem("quizSelectedImageId");
+        if (selected && selected.trim()) return selected;
+        // 2) Fallback to lastImageId (global)
+        const last = sessionStorage.getItem("lastImageId");
+        if (last && last.trim()) return last;
+        // 3) Fallback to last of quizUploadedImageIds
+        try {
+          const raw = sessionStorage.getItem("quizUploadedImageIds");
+          const list = raw ? (JSON.parse(raw) as string[]) : [];
+          if (list.length) return list[list.length - 1] ?? null;
+        } catch { /* ignore */ }
+        // 4) Legacy fallback to imageId
+        const img = sessionStorage.getItem("imageId");
+        return img && img.trim() ? img : null;
+      };
+      const imageId = getQuizImageId();
+      if (!imageId) {
+        throw new Error("No imageId found in session — upload first or set sessionStorage.imageId");
+      }
+      const data = await quizApi.byImage(imageId);
       setQuiz(data);
       setMode("running");
     } catch (e) {

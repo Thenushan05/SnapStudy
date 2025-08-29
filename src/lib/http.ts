@@ -1,5 +1,6 @@
-export const BASE_URL = (import.meta as unknown as { env?: Record<string, string | undefined> })?.env?.VITE_API_BASE_URL
-  ?? "https://snapst.free.beeceptor.com";
+export const BASE_URL =
+  (import.meta as unknown as { env?: Record<string, string | undefined> })?.env
+    ?.VITE_API_BASE_URL ?? "http://localhost:5000";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -22,11 +23,18 @@ function buildUrl(path: string, query?: HttpOptions["query"]): string {
   return url.toString();
 }
 
-async function withTimeout<T>(p: Promise<T>, ms?: number, signal?: AbortSignal): Promise<T> {
+async function withTimeout<T>(
+  p: Promise<T>,
+  ms?: number,
+  signal?: AbortSignal
+): Promise<T> {
   if (!ms) return p;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(`Request timed out after ${ms} ms`)), ms);
+    timeoutId = setTimeout(
+      () => reject(new Error(`Request timed out after ${ms} ms`)),
+      ms
+    );
   });
   try {
     const res = await Promise.race([p, timeoutPromise]);
@@ -37,7 +45,12 @@ async function withTimeout<T>(p: Promise<T>, ms?: number, signal?: AbortSignal):
 }
 
 export class HttpError extends Error {
-  constructor(public status: number, public statusText: string, public url: string, public body?: unknown) {
+  constructor(
+    public status: number,
+    public statusText: string,
+    public url: string,
+    public body?: unknown
+  ) {
     super(`HTTP ${status} ${statusText}`);
   }
 }
@@ -49,12 +62,25 @@ export async function request<TResponse = unknown, TBody = unknown>(
   const { method = "GET", headers, query, body, signal, timeoutMs } = opts;
   const url = buildUrl(path, query);
 
+  // Build headers and inject Authorization if we have a stored token
+  const builtHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(headers || {}),
+  };
+  try {
+    // Only set Authorization if not explicitly provided
+    const hasAuthHeader = Object.keys(builtHeaders).some((k) => k.toLowerCase() === "authorization");
+    if (!hasAuthHeader) {
+      const token = localStorage.getItem('auth_token');
+      if (token) builtHeaders["Authorization"] = `Bearer ${token}`;
+    }
+  } catch (_) {
+    // Accessing localStorage can fail in some environments; ignore
+  }
+
   const init: RequestInit = {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(headers || {}),
-    },
+    headers: builtHeaders,
     signal,
   };
 
@@ -74,7 +100,9 @@ export async function request<TResponse = unknown, TBody = unknown>(
   const fetchPromise = fetch(url, init).then(async (res) => {
     const contentType = res.headers.get("content-type") || "";
     const isJson = contentType.includes("application/json");
-    const data = isJson ? await res.json().catch(() => undefined) : await res.text().catch(() => undefined);
+    const data = isJson
+      ? await res.json().catch(() => undefined)
+      : await res.text().catch(() => undefined);
     if (!res.ok) throw new HttpError(res.status, res.statusText, url, data);
     return data as TResponse;
   });
@@ -82,7 +110,10 @@ export async function request<TResponse = unknown, TBody = unknown>(
   return withTimeout(fetchPromise, timeoutMs, signal);
 }
 
-export function get<TResponse = unknown>(path: string, opts?: Omit<HttpOptions, "method" | "body">) {
+export function get<TResponse = unknown>(
+  path: string,
+  opts?: Omit<HttpOptions, "method" | "body">
+) {
   return request<TResponse>(path, { ...(opts || {}), method: "GET" });
 }
 export function post<TResponse = unknown, TBody = unknown>(
@@ -90,23 +121,38 @@ export function post<TResponse = unknown, TBody = unknown>(
   body?: TBody,
   opts?: Omit<HttpOptions<TBody>, "method" | "body">
 ) {
-  return request<TResponse, TBody>(path, { ...(opts || {}), method: "POST", body });
+  return request<TResponse, TBody>(path, {
+    ...(opts || {}),
+    method: "POST",
+    body,
+  });
 }
 export function put<TResponse = unknown, TBody = unknown>(
   path: string,
   body?: TBody,
   opts?: Omit<HttpOptions<TBody>, "method" | "body">
 ) {
-  return request<TResponse, TBody>(path, { ...(opts || {}), method: "PUT", body });
+  return request<TResponse, TBody>(path, {
+    ...(opts || {}),
+    method: "PUT",
+    body,
+  });
 }
 export function patch<TResponse = unknown, TBody = unknown>(
   path: string,
   body?: TBody,
   opts?: Omit<HttpOptions<TBody>, "method" | "body">
 ) {
-  return request<TResponse, TBody>(path, { ...(opts || {}), method: "PATCH", body });
+  return request<TResponse, TBody>(path, {
+    ...(opts || {}),
+    method: "PATCH",
+    body,
+  });
 }
-export function del<TResponse = unknown>(path: string, opts?: Omit<HttpOptions, "method" | "body">) {
+export function del<TResponse = unknown>(
+  path: string,
+  opts?: Omit<HttpOptions, "method" | "body">
+) {
   return request<TResponse>(path, { ...(opts || {}), method: "DELETE" });
 }
 

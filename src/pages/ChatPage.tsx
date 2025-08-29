@@ -1,44 +1,317 @@
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ChatThread, type Message } from "@/components/chat/ChatThread";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { UploadDropzone } from "@/components/upload/UploadDropzone";
+import { api } from "@/lib/api";
+import { HttpError } from "@/lib/http";
+import { toast } from "sonner";
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const STORAGE_KEY = "chat.thread.v1";
+  const expiryTimerRef = useRef<number | null>(null);
+  // Track restored count and synced count for history posting
+  const restoredCountRef = useRef(0);
+  const historySyncedRef = useRef(0);
+  const warnedSessionRef = useRef(false);
 
-  // Load chat from localStorage on mount
-  useEffect(() => {
+  const CHAT_STORAGE_KEY = "chat_messages";
+  const CHAT_TTL_MS = 60 * 60 * 1000; // 60 minutes
+
+  // Helper to persist sessionId with debug logs
+  const setSessionId = useCallback((sid: string) => {
+    if (!sid) return;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed: unknown = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          type UnknownMessage = { type: "user" | "assistant"; content: string; timestamp?: string | Date };
-          const revived: Message[] = (parsed as UnknownMessage[])
-            .filter((m) => m && (m.type === "user" || m.type === "assistant") && typeof m.content === "string")
-            .map((m) => ({
-              type: m.type,
-              content: m.content,
-              timestamp: m.timestamp ? new Date(m.timestamp) : undefined,
-            }));
-          setMessages(revived);
-        }
-      }
+      sessionStorage.setItem("lastSessionId", sid);
+      console.debug("[chat] stored sessionId:", sid);
     } catch (e) {
-      console.warn("Failed to load chat from storage", e);
+      console.warn("[chat] failed to store sessionId", e);
     }
   }, []);
 
-  // Persist chat on changes
-  useEffect(() => {
+  function clearChatStorage() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-    } catch (e) {
-      console.warn("Failed to save chat to storage", e);
+      sessionStorage.removeItem(CHAT_STORAGE_KEY);
+    } catch (_) {
+      /* no-op */
+    }
+  }
+
+  function saveChat(messagesToSave: Message[]) {
+    const payload = {
+      messages: messagesToSave.map((m) => ({
+        ...m,
+        timestamp: m.timestamp
+          ? new Date(m.timestamp).toISOString()
+          : undefined,
+      })),
+      savedAt: Date.now(),
+    };
+    try {
+      sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(payload));
+    } catch (_) {
+      /* no-op */
+    }
+  }
+
+  function loadChat(): Message[] | null {
+    try {
+      const raw = sessionStorage.getItem(CHAT_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as {
+        messages: Message[];
+        savedAt: number;
+      };
+      if (!parsed?.savedAt || !Array.isArray(parsed?.messages)) return null;
+      const age = Date.now() - parsed.savedAt;
+      if (age > CHAT_TTL_MS) {
+        clearChatStorage();
+        return null;
+      }
+      const restored: Message[] = parsed.messages.map((m) => ({
+        ...m,
+        timestamp: m.timestamp ? new Date(m.timestamp) : undefined,
+        // Do not animate restored messages
+        animate: false,
+      }));
+      return restored;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  const scheduleExpiry = useCallback(
+    (fromSavedAt?: number) => {
+      if (expiryTimerRef.current) {
+        window.clearTimeout(expiryTimerRef.current);
+        expiryTimerRef.current = null;
+      }
+      const raw = sessionStorage.getItem(CHAT_STORAGE_KEY);
+      let remaining = CHAT_TTL_MS;
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as { savedAt?: number };
+          const savedAt = fromSavedAt ?? parsed?.savedAt ?? Date.now();
+          remaining = Math.max(0, savedAt + CHAT_TTL_MS - Date.now());
+        } catch {
+          remaining = CHAT_TTL_MS;
+        }
+      }
+      expiryTimerRef.current = window.setTimeout(() => {
+        setMessages([]);
+        clearChatStorage();
+        toast.info("Chat cleared after 5 minutes");
+      }, remaining);
+    },
+    [CHAT_TTL_MS]
+  );
+
+  // Load chat on mount if not expired
+  useEffect(() => {
+    const restored = loadChat();
+    if (restored && restored.length) {
+      setMessages(restored);
+      restoredCountRef.current = restored.length;
+    }
+    scheduleExpiry();
+    return () => {
+      if (expiryTimerRef.current) window.clearTimeout(expiryTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleExpiry]);
+
+  // Persist chat and reset expiry whenever messages change
+  useEffect(() => {
+    saveChat(messages);
+    // Update expiry starting now
+    try {
+      const raw = sessionStorage.getItem(CHAT_STORAGE_KEY);
+      const savedAt = raw ? (JSON.parse(raw).savedAt as number) : Date.now();
+      scheduleExpiry(savedAt);
+    } catch {
+      scheduleExpiry();
+    }
+  }, [messages, scheduleExpiry]);
+
+  // Post chat history on every new message appended (skip restored-on-mount)
+  useEffect(() => {
+    const sessionId = sessionStorage.getItem("lastSessionId") || "";
+    if (!sessionId) return;
+    // Skip the messages restored on mount
+    if (historySyncedRef.current === 0 && restoredCountRef.current > 0) {
+      historySyncedRef.current = restoredCountRef.current;
+    }
+    if (messages.length > historySyncedRef.current) {
+      const batch = messages.slice(historySyncedRef.current);
+      batch.forEach((m) => {
+        if (m?.type === "user" || m?.type === "assistant") {
+          api.chat
+            .postHistory({ sessionId, role: m.type, text: m.content })
+            .catch((e) => {
+              if (e instanceof HttpError && e.status === 404) {
+                // Session not found -> warn once (do not clear to aid debugging)
+                if (!warnedSessionRef.current) {
+                  warnedSessionRef.current = true;
+                  toast.error(
+                    "Chat session expired or missing. Please upload/process again to start a new session."
+                  );
+                }
+              } else {
+                console.warn("postHistory failed", e);
+              }
+            });
+        }
+      });
+      historySyncedRef.current = messages.length;
     }
   }, [messages]);
+
+  async function retryProcess() {
+    const imageId = sessionStorage.getItem("lastImageId");
+    if (!imageId) {
+      toast.error("No image to process. Please upload again.");
+      return;
+    }
+    try {
+      setIsLoading(true);
+      toast("Re-trying processing…");
+      const proc = await api.process.image({ imageId });
+      const sessionId = proc.data?.sessionId;
+      if (sessionId) setSessionId(sessionId);
+      const evidenceCount = Number(proc.data?.evidenceCount ?? 0);
+      if (evidenceCount === 0) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            type: "assistant",
+            content: "Server busy. Please try again.",
+            timestamp: new Date(),
+            action: { type: "retryProcess", label: "Retry" },
+            animate: true,
+          },
+        ]);
+        toast.error("Server busy. Try again.");
+        return;
+      }
+      const summary = proc.data?.summary || "Processed.";
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "assistant",
+          content: `Summary: ${summary}`,
+          timestamp: new Date(),
+          animate: true,
+        },
+      ]);
+      toast.success("Image processed");
+    } catch (err) {
+      console.error("retry process failed", err);
+      toast.error("Retry failed");
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "assistant",
+          content: "Retry failed. Please try later.",
+          timestamp: new Date(),
+          animate: true,
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleFilesUpload(files: File[]) {
+    if (!files || files.length === 0) return;
+    try {
+      setIsLoading(true);
+      toast("Uploading…");
+      const file = files[0];
+      const up = await api.upload.imageFile(file, {
+        filename: file.name,
+        tags: ["chat"],
+      });
+      const imageId = up.image.id;
+      const imageUrl = up.image.url;
+      sessionStorage.setItem("lastImageId", imageId);
+      // Maintain last 3 uploads for chat picker as last1/last2/last3
+      try {
+        const parseEntry = (key: string) => {
+          const v = sessionStorage.getItem(key);
+          if (!v) return null;
+          try { return JSON.parse(v) as { id: string; name?: string }; } catch { return null; }
+        };
+        const e1 = parseEntry("last1");
+        const e2 = parseEntry("last2");
+        // shift down and insert new at last1
+        if (e2) sessionStorage.setItem("last3", JSON.stringify(e2));
+        if (e1) sessionStorage.setItem("last2", JSON.stringify(e1));
+        sessionStorage.setItem("last1", JSON.stringify({ id: imageId, name: file.name }));
+      } catch (e) {
+        console.warn("failed to update last1/2/3", e);
+        try { sessionStorage.setItem("last1", JSON.stringify({ id: imageId, name: file.name })); } catch { /* ignore */ }
+      }
+      // If upload returns a sessionId, store it
+      if (up.image.sessionId) setSessionId(String(up.image.sessionId));
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "user",
+          content: `Uploaded ${file.name}`,
+          timestamp: new Date(),
+        },
+        {
+          type: "assistant",
+          content: `Image uploaded. ID: ${imageId}`,
+          timestamp: new Date(),
+        },
+      ]);
+
+      // Call process API
+      const proc = await api.process.image({ imageId });
+      const sessionId = proc.data?.sessionId;
+      if (sessionId) setSessionId(sessionId);
+      const evidenceCount = Number(proc.data?.evidenceCount ?? 0);
+      if (evidenceCount === 0) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            type: "assistant",
+            content: "Server busy. Please try again.",
+            timestamp: new Date(),
+            action: { type: "retryProcess", label: "Retry" },
+          },
+        ]);
+        toast.error("Server busy. Try again.");
+      } else {
+        const summary = proc.data?.summary || "Processed.";
+        setMessages((prev) => [
+          ...prev,
+          {
+            type: "assistant",
+            content: `Summary: ${summary}`,
+            timestamp: new Date(),
+            animate: true,
+          },
+        ]);
+        toast.success("Image processed");
+      }
+    } catch (err: unknown) {
+      console.error("Upload/process failed", err);
+      toast.error("Upload failed");
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "assistant",
+          content: "Failed to upload/process the image.",
+          timestamp: new Date(),
+          animate: true,
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -50,37 +323,102 @@ export default function ChatPage() {
                 Turn your notes into knowledge
               </h1>
               <p className="text-lg text-muted text-balance">
-                Drop a photo of your notes to start learning with AI-powered summaries, quizzes, and mind maps.
+                Drop a photo of your notes to start learning with AI-powered
+                summaries, quizzes, and mind maps.
               </p>
             </div>
-            <UploadDropzone 
-              onUpload={(files) => {
-                // Handle file upload
-                console.log("Files uploaded:", files);
-              }}
-            />
+            <UploadDropzone onUpload={handleFilesUpload} />
           </div>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto px-3 sm:px-4 pb-[120px] sm:pb-28">
-          <ChatThread messages={messages} isLoading={isLoading} />
+          <ChatThread
+            messages={messages}
+            isLoading={isLoading}
+            onRetryProcess={retryProcess}
+          />
         </div>
       )}
-      
-      <ChatComposer 
-        onSend={(message) => {
-          setMessages(prev => [...prev, { type: "user", content: message, timestamp: new Date() }]);
-          setIsLoading(true);
-          // Simulate AI response
-          setTimeout(() => {
-            setMessages(prev => [...prev, { 
-              type: "assistant", 
-              content: "I'd be happy to help you with that! Please upload an image of your notes so I can analyze them and provide summaries, explanations, or create quizzes.",
-              timestamp: new Date(),
-            }]);
+
+      <ChatComposer
+        onSend={async (message) => {
+          const text = message.trim();
+          if (!text) return;
+          const sessionId = sessionStorage.getItem("lastSessionId") || "";
+          const selected = sessionStorage.getItem("selectedImageId") || "";
+          const imageId = selected || sessionStorage.getItem("lastImageId") || "";
+          setMessages((prev) => [
+            ...prev,
+            { type: "user", content: text, timestamp: new Date() },
+          ]);
+          // history posting handled by centralized useEffect
+
+          if (!sessionId || !imageId) {
+            toast.error("Please upload an image first to start a chat.");
+            setMessages((prev) => [
+              ...prev,
+              {
+                type: "assistant",
+                content:
+                  "Please upload an image first so I can analyze it and chat about it.",
+                timestamp: new Date(),
+              },
+            ]);
+            return;
+          }
+          try {
+            setIsLoading(true);
+            const res = await api.chat.rag({ sessionId, imageId, text });
+            const newSessionId = res.data?.sessionId;
+            if (newSessionId) setSessionId(newSessionId);
+            const reply =
+              res.data?.response?.content ||
+              res.data?.reply ||
+              res.message ||
+              "";
+            setMessages((prev) => [
+              ...prev,
+              {
+                type: "assistant",
+                content: reply || "(no reply)",
+                timestamp: new Date(),
+                animate: true,
+              },
+            ]);
+            // history posting handled by centralized useEffect
+
+            // After chat response, fetch updated mind map using last image id
+            try {
+              const imgId = sessionStorage.getItem("lastImageId") || imageId;
+              if (imgId) {
+                const nodes = await api.mindmap.byImage(imgId);
+                // Save to session for any mindmap view to pick up
+                // sessionStorage.setItem(
+                //   "mindmap_nodes",
+                //   JSON.stringify({ nodes, savedAt: Date.now() })
+                // );
+              }
+            } catch (e) {
+              // Non-blocking: ignore failures silently or log
+              console.warn("mindmap fetch failed", e);
+            }
+          } catch (err) {
+            console.error("chat.rag failed", err);
+            toast.error("Chat failed");
+            setMessages((prev) => [
+              ...prev,
+              {
+                type: "assistant",
+                content: "I couldn't process that chat request.",
+                timestamp: new Date(),
+                animate: true,
+              },
+            ]);
+          } finally {
             setIsLoading(false);
-          }, 1000);
+          }
         }}
+        onUpload={handleFilesUpload}
         disabled={isLoading}
       />
     </div>

@@ -6,23 +6,100 @@ import { useToast } from "@/hooks/use-toast";
 import { addStickyFromText } from "@/lib/stickyStorage";
 import { User, Bot, StickyNote, Copy } from "lucide-react";
 
+export interface MessageAction {
+  type: "retryProcess";
+  label?: string;
+}
+
 export interface Message {
   type: "user" | "assistant";
   content: string;
   timestamp?: Date;
+  action?: MessageAction;
+  animate?: boolean; // if false, do not animate even if last assistant
 }
 
 interface ChatThreadProps {
   messages: Message[];
   isLoading?: boolean;
+  onRetryProcess?: () => void;
 }
 
-export function ChatThread({ messages, isLoading }: ChatThreadProps) {
+export function ChatThread({ messages, isLoading, onRetryProcess }: ChatThreadProps) {
   const { toast } = useToast();
   const [typedText, setTypedText] = useState("");
   const [isAnimating, setIsAnimating] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const prevAssistantKeyRef = useRef<string | null>(null);
+
+  // Simple markdown-lite renderer: supports #, ##, ###, -, *, **bold**, *italic*
+  const renderMarkdownLite = (text: string) => {
+    const lines = text.split(/\r?\n/);
+    const elements: JSX.Element[] = [];
+    let listBuffer: string[] = [];
+    const flushList = () => {
+      if (listBuffer.length > 0) {
+        elements.push(
+          <ul className="list-disc pl-5 space-y-1" key={`ul-${elements.length}`}>
+            {listBuffer.map((item, idx) => (
+              <li key={idx} dangerouslySetInnerHTML={{ __html: inline(item) }} />
+            ))}
+          </ul>
+        );
+        listBuffer = [];
+      }
+    };
+    const inline = (s: string) => {
+      // escape minimal HTML
+      const esc = s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      // bold **text** and italic *text*
+      const bolded = esc.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      const italicized = bolded.replace(/(^|\s)\*(?!\*)([^*]+?)\*(?=\s|$)/g, "$1<em>$2</em>");
+      return italicized;
+    };
+    lines.forEach((line, i) => {
+      const trimmed = line.trim();
+      if (/^[-*]\s+/.test(trimmed)) {
+        listBuffer.push(trimmed.replace(/^[-*]\s+/, ""));
+        return;
+      }
+      flushList();
+      if (/^###\s+/.test(trimmed)) {
+        elements.push(
+          <h3
+            className="font-semibold text-base mt-2 text-pink-600 dark:text-pink-400"
+            key={`h3-${i}`}
+            dangerouslySetInnerHTML={{ __html: inline(trimmed.replace(/^###\s+/, "")) }}
+          />
+        );
+      } else if (/^##\s+/.test(trimmed)) {
+        elements.push(
+          <h2
+            className="font-semibold text-lg mt-2 text-fuchsia-600 dark:text-fuchsia-400"
+            key={`h2-${i}`}
+            dangerouslySetInnerHTML={{ __html: inline(trimmed.replace(/^##\s+/, "")) }}
+          />
+        );
+      } else if (/^#\s+/.test(trimmed)) {
+        elements.push(
+          <h1
+            className="font-bold text-xl mt-2 text-indigo-600 dark:text-indigo-400"
+            key={`h1-${i}`}
+            dangerouslySetInnerHTML={{ __html: inline(trimmed.replace(/^#\s+/, "")) }}
+          />
+        );
+      } else if (trimmed.length === 0) {
+        elements.push(<div className="h-2" key={`sp-${i}`} />);
+      } else {
+        elements.push(<p className="leading-relaxed" key={`p-${i}`} dangerouslySetInnerHTML={{ __html: inline(trimmed) }} />);
+      }
+    });
+    flushList();
+    return <div className="space-y-1">{elements}</div>;
+  };
 
   // Find last assistant message index
   const lastAssistantIndex = (() => {
@@ -40,6 +117,15 @@ export function ChatThread({ messages, isLoading }: ChatThreadProps) {
       return;
     }
     const last = messages[lastAssistantIndex];
+    // Respect explicit animate flag
+    if (last?.type === "assistant" && last?.animate === false) {
+      setIsAnimating(false);
+      setTypedText("");
+      // Still set the key so subsequent identical content doesn't animate
+      const keyNoAnim = `${last?.content ?? ""}|${(last?.timestamp as Date | undefined)?.getTime?.() ?? ""}`;
+      prevAssistantKeyRef.current = keyNoAnim;
+      return;
+    }
     const key = `${last?.content ?? ""}|${(last?.timestamp as Date | undefined)?.getTime?.() ?? ""}`;
     if (key === prevAssistantKeyRef.current) {
       // Same last assistant as before; don't animate
@@ -116,20 +202,18 @@ export function ChatThread({ messages, isLoading }: ChatThreadProps) {
                 : "bg-surface border border-border"
             }`}
           >
-            <p className="text-sm leading-relaxed">
-              {index === lastAssistantIndex && message.type === "assistant" && isAnimating ? (
-                <>
-                  {typedText}
-                  <span className="inline-flex items-center ml-1 align-middle">
-                    <span className="w-1.5 h-1.5 bg-muted rounded-full animate-pulse"></span>
-                    <span className="w-1.5 h-1.5 bg-muted rounded-full animate-pulse ml-0.5 delay-100"></span>
-                    <span className="w-1.5 h-1.5 bg-muted rounded-full animate-pulse ml-0.5 delay-200"></span>
-                  </span>
-                </>
-              ) : (
-                message.content
-              )}
-            </p>
+            {index === lastAssistantIndex && message.type === "assistant" && isAnimating ? (
+              <p className="text-sm leading-relaxed">
+                {typedText}
+                <span className="inline-flex items-center ml-1 align-middle">
+                  <span className="w-1.5 h-1.5 bg-muted rounded-full animate-pulse"></span>
+                  <span className="w-1.5 h-1.5 bg-muted rounded-full animate-pulse ml-0.5 delay-100"></span>
+                  <span className="w-1.5 h-1.5 bg-muted rounded-full animate-pulse ml-0.5 delay-200"></span>
+                </span>
+              </p>
+            ) : (
+              <div className="text-sm">{message.type === "assistant" ? renderMarkdownLite(message.content) : <p className="leading-relaxed">{message.content}</p>}</div>
+            )}
             {message.type === "assistant" && (
               <div className="mt-2 flex gap-1">
                 <TooltipProvider>
@@ -161,6 +245,21 @@ export function ChatThread({ messages, isLoading }: ChatThreadProps) {
                     </TooltipTrigger>
                     <TooltipContent>Copy</TooltipContent>
                   </Tooltip>
+                  {message.action?.type === "retryProcess" && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onRetryProcess?.()}
+                          className="ml-1"
+                        >
+                          {message.action.label || "Retry"}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Try processing again</TooltipContent>
+                    </Tooltip>
+                  )}
                 </TooltipProvider>
               </div>
             )}

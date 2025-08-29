@@ -16,6 +16,61 @@ function parseMindMapResponse(data: unknown): MindMapNode[] {
 
   // normalize container
   const container = isObject(data) ? (data as Record<string, unknown>) : undefined;
+  // Unwrap common envelopes: { data: {...} } or { data: { mindmap: {...} } }
+  const inner = ((): Record<string, unknown> | undefined => {
+    if (!container) return undefined;
+    const c1 = container;
+    if (isObject(c1.data)) {
+      const d = c1.data as Record<string, unknown>;
+      if (isObject(d.mindmap)) return d.mindmap as Record<string, unknown>;
+      return d;
+    }
+    if (isObject(c1.mindmap)) return c1.mindmap as Record<string, unknown>;
+    return c1;
+  })();
+  // New: support tree response { root: { id, text, children: [...] }, ... }
+  if (inner && isObject(inner.root)) {
+    type TreeNode = { id?: unknown; text?: unknown; title?: unknown; children?: unknown };
+    const root = inner.root as TreeNode;
+    const nodesOut: MindMapNode[] = [];
+    const edges: Array<{ source: string; target: string }> = [];
+
+    const visit = (node: TreeNode, level: number, parentId?: string) => {
+      const id = String(node.id ?? cryptoRandomId());
+      const labelRaw = (typeof node.text === 'string' && node.text)
+        || (typeof node.title === 'string' && node.title)
+        || '';
+      const label = String(labelRaw);
+      const childrenArr = Array.isArray(node.children) ? (node.children as unknown[]) : [];
+      const childIds: string[] = [];
+      for (const ch of childrenArr) {
+        if (!isObject(ch)) continue;
+        const cid = String((ch as TreeNode).id ?? cryptoRandomId());
+        childIds.push(cid);
+        edges.push({ source: id, target: cid });
+      }
+      nodesOut.push({ id, label, x: 0, y: 0, level, children: childIds, parent: parentId });
+      for (const ch of childrenArr) {
+        if (!isObject(ch)) continue;
+        visit(ch as TreeNode, level + 1, id);
+      }
+    };
+
+    visit(root, 0);
+
+    // Simple layout: x by level, y stacked per level
+    const grouped = new Map<number, MindMapNode[]>();
+    for (const n of nodesOut) grouped.set(n.level, [...(grouped.get(n.level) || []), n]);
+    for (const [lvl, list] of grouped) {
+      list.forEach((n, idx) => {
+        n.x = lvl * 240;
+        n.y = idx * 100;
+      });
+    }
+    return nodesOut;
+  }
+
+  // normalize container
   const rawNodes: unknown[] = Array.isArray(data)
     ? data
     : Array.isArray(container?.nodes)
@@ -114,32 +169,218 @@ export const api = {
       const data = await http.get<unknown>("/mindmap", { signal });
       return parseMindMapResponse(data);
     },
-    // Example for future endpoints:
-    // create(payload: { title: string; root: string }, signal?: AbortSignal) {
-    //   return http.post("/mindmap", payload, { signal });
-    // },
+    async byImage(imageId: string, signal?: AbortSignal): Promise<MindMapNode[]> {
+      if (!imageId) throw new Error("imageId is required");
+      const path = `/api/mindmap/${encodeURIComponent(imageId)}`;
+      const data = await http.get<unknown>(path, { signal, timeoutMs: 20000 });
+      return parseMindMapResponse(data);
+    },
+    async save(imageId: string, nodes: MindMapNode[], opts?: { signal?: AbortSignal; path?: string }): Promise<{ success: boolean; message?: string }> {
+      if (!imageId) throw new Error("imageId is required");
+      if (!Array.isArray(nodes)) throw new Error("nodes array is required");
+      const path = opts?.path ?? "/api/mindmap/save";
+      try {
+        await http.post(path, { imageId, nodes }, { signal: opts?.signal, timeoutMs: 15000 });
+        return { success: true };
+      } catch (err) {
+        // Fallback to localStorage so user changes aren't lost
+        try {
+          const key = `mindmap:${imageId}`;
+          const payload = { imageId, nodes, savedAt: new Date().toISOString() };
+          localStorage.setItem(key, JSON.stringify(payload));
+          return { success: true, message: "Saved locally (offline)" };
+        } catch (_) {
+          throw err instanceof Error ? err : new Error("Failed to save mind map");
+        }
+      }
+    },
+  },
+  calendar: {
+    async entries(opts?: { signal?: AbortSignal; path?: string }): Promise<unknown> {
+      const path = opts?.path ?? "/api/calendar/entries";
+      return http.get<unknown>(path, { signal: opts?.signal, timeoutMs: 15000 });
+    },
+    async create(
+      payload: {
+        title: string;
+        subject: string;
+        topic: string;
+        startDate: string; // ISO string
+        duration: number; // minutes
+        priority: "high" | "medium" | "low";
+        notes?: string;
+        color?: string;
+        emoji?: string;
+      },
+      opts?: { signal?: AbortSignal; path?: string }
+    ): Promise<{
+      success?: boolean;
+      data?: { id?: string; _id?: string; [k: string]: unknown } | null;
+      id?: string; // some backends may return id at root
+      message?: string;
+    }> {
+      const path = opts?.path ?? "/api/calendar/create";
+      return http.post(path, payload, { signal: opts?.signal, timeoutMs: 15000 });
+    },
+  },
+  quiz: {
+    async byImage(imageId: string, opts?: { signal?: AbortSignal; path?: string }): Promise<Quiz> {
+      if (!imageId) throw new Error("imageId is required");
+      const path = opts?.path ?? `/api/quiz/${encodeURIComponent(imageId)}`;
+      const data = await http.get<unknown>(path, { signal: opts?.signal, timeoutMs: 20000 });
+      const parsed = parseQuizResponse(data);
+      if (!parsed) throw new Error("Invalid quiz response");
+      return parsed;
+    },
   },
   // Minimal image upload API. Expects backend to return { url: string }
   // Path defaults to "/upload"; adjust as needed to match your server.
   upload: {
-    async image(form: FormData, opts?: { path?: string; signal?: AbortSignal }): Promise<{ url: string }> {
-      const path = opts?.path ?? "/upload";
-      // If your backend needs a field name, the caller should append under 'file'
-      // e.g., form.append('file', blob, filename)
-      const res = await http.post<{ url: string }>(path, form, { signal: opts?.signal, timeoutMs: 20000 });
-      if (!res || typeof res.url !== "string" || !res.url) {
-        throw new Error("Invalid upload response: missing url");
-      }
+    async image(form: FormData, opts?: { path?: string; signal?: AbortSignal }): Promise<{
+      success: boolean;
+      image: {
+        id: string;
+        cloudinaryId: string;
+        url: string;
+        width?: number;
+        height?: number;
+        format?: string;
+        size?: number;
+        uploadedAt?: string | Date;
+        userId?: string;
+        sessionId?: string | null;
+        tags?: string[];
+      };
+    }> {
+      // Backend route is POST /api/upload with field name 'image'
+      const path = opts?.path ?? "/api/upload";
+      const res = await http.post<{
+        success: boolean;
+        image: {
+          id: string;
+          cloudinaryId: string;
+          url: string;
+          width?: number;
+          height?: number;
+          format?: string;
+          size?: number;
+          uploadedAt?: string | Date;
+          userId?: string;
+          sessionId?: string | null;
+          tags?: string[];
+        };
+      }>(path, form, { signal: opts?.signal, timeoutMs: 20000 });
       return res;
+    },
+    async imageFile(
+      file: File | Blob,
+      opts?: { filename?: string; tags?: string[]; sessionId?: string; path?: string; signal?: AbortSignal }
+    ): Promise<{
+      success: boolean;
+      image: {
+        id: string;
+        cloudinaryId: string;
+        url: string;
+        width?: number;
+        height?: number;
+        format?: string;
+        size?: number;
+        uploadedAt?: string | Date;
+        userId?: string;
+        sessionId?: string | null;
+        tags?: string[];
+      };
+    }> {
+      const fd = new FormData();
+      fd.append('image', file, (opts?.filename ?? 'upload') + (file instanceof File && file.name.includes('.') ? '' : '.png'));
+      if (opts?.sessionId) fd.append('sessionId', opts.sessionId);
+      if (opts?.tags?.length) fd.append('tags', opts.tags.join(','));
+      return this.image(fd, { path: opts?.path, signal: opts?.signal });
+    }
+  },
+  process: {
+    async image(
+      payload: { imageId: string; userId?: string; options?: Record<string, unknown> },
+      opts?: { signal?: AbortSignal; path?: string }
+    ): Promise<{
+      success: boolean;
+      data: {
+        imageId: string;
+        sessionId: string;
+        summary: string;
+        evidence: Array<{ id: string; text: string; confidence?: number; bbox?: unknown; ocrMethod?: string }>;
+        evidenceCount: number;
+        processingTime: number;
+        message?: string;
+      };
+      message?: string;
+    }> {
+      const path = opts?.path ?? "/api/process";
+      if (!payload?.imageId) throw new Error("imageId is required");
+      return http.post(path, payload, { signal: opts?.signal, timeoutMs: 60000 });
+    },
+  },
+  chat: {
+    async rag(
+      payload: { sessionId: string; imageId: string; text?: string; message?: string; userId?: string; options?: Record<string, unknown>; context?: string },
+      opts?: { signal?: AbortSignal; path?: string }
+    ): Promise<{
+      success: boolean;
+      data?: { reply?: string; sessionId?: string; citations?: unknown[]; response?: { content?: string; [k: string]: unknown }; [k: string]: unknown };
+      message?: string;
+    }> {
+      const path = opts?.path ?? "/api/chat/rag";
+      if (!payload?.sessionId) throw new Error("sessionId is required");
+      if (!payload?.imageId) throw new Error("imageId is required");
+      const msg = (payload.message ?? payload.text ?? "").trim();
+      if (!msg) throw new Error("message text is required");
+      const body = {
+        sessionId: payload.sessionId,
+        imageId: payload.imageId,
+        message: msg,
+        context: payload.context ?? "study_session",
+        userId: payload.userId,
+        options: payload.options,
+      } as Record<string, unknown>;
+      return http.post(path, body, { signal: opts?.signal, timeoutMs: 60000 });
+    },
+    async postHistory(
+      payload: { sessionId: string; role: 'user' | 'assistant'; text: string; messageType?: string },
+      opts?: { signal?: AbortSignal; path?: string }
+    ): Promise<{ success?: boolean; message?: string }> {
+      if (!payload?.sessionId) throw new Error("sessionId is required");
+      const path = opts?.path ?? `/api/sessions/${encodeURIComponent(payload.sessionId)}/chat`;
+      const body = {
+        role: payload.role,
+        text: payload.text,
+        messageType: payload.messageType ?? 'chat',
+      } as const;
+      return http.post(path, body, { signal: opts?.signal, timeoutMs: 20000 });
     },
   },
   // Notes API for saving editor content
   notes: {
-    async save(payload: { id: string; title: string; content: string; tags: string[] }, opts?: { signal?: AbortSignal }) {
+    async save(
+      payload: { id: string; title: string; content: string; tags: string[]; tagsCsv?: string },
+      opts?: { signal?: AbortSignal; path?: string }
+    ): Promise<unknown> {
       if (!payload?.id) throw new Error("Note id is required");
-      const body = { title: payload.title, content: payload.content, tags: payload.tags };
-      // PUT to /notes/:id. Adjust path if your backend differs.
-      await http.put(`/notes/${encodeURIComponent(payload.id)}`, body, { signal: opts?.signal, timeoutMs: 10000 });
+      const body: Record<string, unknown> = {
+        title: payload.title,
+        content: payload.content,
+        tags: payload.tags,
+      };
+      if (payload.tagsCsv !== undefined) body.tagsCsv = payload.tagsCsv;
+      // PUT to /notes/:id by default; allow fixed override like /notes/note_123
+      const path = opts?.path ?? `/notes/${encodeURIComponent(payload.id)}`;
+      return http.put(path, body, { signal: opts?.signal, timeoutMs: 10000 });
+    },
+    async get(
+      idOrPath?: { id?: string; path?: string },
+      opts?: { signal?: AbortSignal }
+    ): Promise<unknown> {
+      const path = idOrPath?.path ?? (idOrPath?.id ? `/notes/${encodeURIComponent(idOrPath.id)}` : '/notes/note_123');
+      return http.get(path, { signal: opts?.signal, timeoutMs: 10000 });
     },
   },
 } as const;
@@ -264,5 +505,13 @@ export const quizApi = {
     const fbParsed = parseQuizResponse(fbData);
     if (!fbParsed) throw new Error("Invalid quiz response (fallback)");
     return fbParsed;
+  },
+  async byImage(imageId: string, signal?: AbortSignal): Promise<Quiz> {
+    if (!imageId) throw new Error("imageId is required");
+    const path = `/api/quiz/${encodeURIComponent(imageId)}`;
+    const data = await http.get<unknown>(path, { signal, timeoutMs: 20000 });
+    const parsed = parseQuizResponse(data);
+    if (!parsed) throw new Error("Invalid quiz response");
+    return parsed;
   },
 } as const;

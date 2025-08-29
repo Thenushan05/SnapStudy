@@ -9,7 +9,8 @@ import {
   Brain, 
   FileQuestion,
   Maximize,
-  Trash
+  Trash,
+  Save
 } from "lucide-react";
 
 type MindMapAction =
@@ -18,6 +19,7 @@ type MindMapAction =
   | "reset-view"
   | "fullscreen"
   | "export"
+  | "save"
   | "add-node"
   | "expand-with-ai"
   | "create-quiz"
@@ -131,15 +133,26 @@ export function MindMapToolbar({ selectedNodeId, onAction }: MindMapToolbarProps
           <Separator orientation="vertical" className="h-6" />
 
           {/* Export */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onAction("export")}
-            className="gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => onAction("save")}
+              className="gap-2"
+            >
+              <Save className="w-4 h-4" />
+              Save
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onAction("export")}
+              className="gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </Button>
+          </div>
         </div>
       </div>
     </div>
