@@ -9,17 +9,26 @@ export interface LoginRequestBody {
   password: string;
 }
 
+// Matches both routes/authRoutes.js and controllers/authController.js responses
 export interface AuthResponse {
-  message: string;
+  success?: boolean;
+  message?: string;
   token?: string;
   user?: {
     id: string;
-    username: string;
     email: string;
+    // Some endpoints return username, others name
+    username?: string;
+    name?: string;
+    role?: string;
+    lastLogin?: string;
+    preferences?: Record<string, unknown>;
   };
 }
 
 export interface ApiError {
-    message: string;
+    // Backend may return either `error` or `message`
+    error?: string;
+    message?: string;
     errors?: Record<string, string[]>;
 }

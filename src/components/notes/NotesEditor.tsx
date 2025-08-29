@@ -430,11 +430,11 @@ export function NotesEditor({
                   toast("Uploading drawing…", { id: uploadingId });
                   const blob = await (await fetch(dataUrl)).blob();
                   const fileName = `drawing-${Date.now()}.png`;
-                  const form = new FormData();
-                  form.append("file", blob, fileName);
-
-                  // Upload to server; backend should respond with { url }
-                  const { url } = await api.upload.image(form);
+                  // Upload to server using correct field name via helper
+                  const up = await api.upload.imageFile(new File([blob], fileName, { type: "image/png" }));
+                  const url = up.image.url;
+                  const imageId = up.image.id;
+                  if (imageId) sessionStorage.setItem("lastImageId", imageId);
 
                   if (quill) {
                     // Insert image embed at current selection

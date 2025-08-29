@@ -35,7 +35,7 @@ export default function RegisterPage() {
     } catch (error) {
       if (error instanceof HttpError) {
         const apiError = error.body as ApiError;
-        setError(apiError.message || 'An error occurred during registration.');
+        setError(apiError.error || apiError.message || 'An error occurred during registration.');
       } else {
         setError('An unexpected error occurred.');
       }

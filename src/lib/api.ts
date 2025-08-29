@@ -122,15 +122,113 @@ export const api = {
   // Minimal image upload API. Expects backend to return { url: string }
   // Path defaults to "/upload"; adjust as needed to match your server.
   upload: {
-    async image(form: FormData, opts?: { path?: string; signal?: AbortSignal }): Promise<{ url: string }> {
-      const path = opts?.path ?? "/upload";
-      // If your backend needs a field name, the caller should append under 'file'
-      // e.g., form.append('file', blob, filename)
-      const res = await http.post<{ url: string }>(path, form, { signal: opts?.signal, timeoutMs: 20000 });
-      if (!res || typeof res.url !== "string" || !res.url) {
-        throw new Error("Invalid upload response: missing url");
-      }
+    async image(form: FormData, opts?: { path?: string; signal?: AbortSignal }): Promise<{
+      success: boolean;
+      image: {
+        id: string;
+        cloudinaryId: string;
+        url: string;
+        width?: number;
+        height?: number;
+        format?: string;
+        size?: number;
+        uploadedAt?: string | Date;
+        userId?: string;
+        sessionId?: string | null;
+        tags?: string[];
+      };
+    }> {
+      // Backend route is POST /api/upload with field name 'image'
+      const path = opts?.path ?? "/api/upload";
+      const res = await http.post<{
+        success: boolean;
+        image: {
+          id: string;
+          cloudinaryId: string;
+          url: string;
+          width?: number;
+          height?: number;
+          format?: string;
+          size?: number;
+          uploadedAt?: string | Date;
+          userId?: string;
+          sessionId?: string | null;
+          tags?: string[];
+        };
+      }>(path, form, { signal: opts?.signal, timeoutMs: 20000 });
       return res;
+    },
+    async imageFile(
+      file: File | Blob,
+      opts?: { filename?: string; tags?: string[]; sessionId?: string; path?: string; signal?: AbortSignal }
+    ): Promise<{
+      success: boolean;
+      image: {
+        id: string;
+        cloudinaryId: string;
+        url: string;
+        width?: number;
+        height?: number;
+        format?: string;
+        size?: number;
+        uploadedAt?: string | Date;
+        userId?: string;
+        sessionId?: string | null;
+        tags?: string[];
+      };
+    }> {
+      const fd = new FormData();
+      fd.append('image', file, (opts?.filename ?? 'upload') + (file instanceof File && file.name.includes('.') ? '' : '.png'));
+      if (opts?.sessionId) fd.append('sessionId', opts.sessionId);
+      if (opts?.tags?.length) fd.append('tags', opts.tags.join(','));
+      return this.image(fd, { path: opts?.path, signal: opts?.signal });
+    }
+  },
+  process: {
+    async image(
+      payload: { imageId: string; userId?: string; options?: Record<string, unknown> },
+      opts?: { signal?: AbortSignal; path?: string }
+    ): Promise<{
+      success: boolean;
+      data: {
+        imageId: string;
+        sessionId: string;
+        summary: string;
+        evidence: Array<{ id: string; text: string; confidence?: number; bbox?: unknown; ocrMethod?: string }>;
+        evidenceCount: number;
+        processingTime: number;
+        message?: string;
+      };
+      message?: string;
+    }> {
+      const path = opts?.path ?? "/api/process";
+      if (!payload?.imageId) throw new Error("imageId is required");
+      return http.post(path, payload, { signal: opts?.signal, timeoutMs: 60000 });
+    },
+  },
+  chat: {
+    async rag(
+      payload: { sessionId: string; imageId: string; text?: string; message?: string; userId?: string; options?: Record<string, unknown>; context?: string },
+      opts?: { signal?: AbortSignal; path?: string }
+    ): Promise<{
+      success: boolean;
+      data?: { reply?: string; sessionId?: string; citations?: unknown[]; response?: { content?: string; [k: string]: unknown }; [k: string]: unknown };
+      message?: string;
+    }> {
+      const path = opts?.path ?? "/api/chat/rag";
+      if (!payload?.sessionId) throw new Error("sessionId is required");
+      if (!payload?.imageId) throw new Error("imageId is required");
+      const msg = (payload.message ?? payload.text ?? "").trim();
+      if (!msg) throw new Error("message text is required");
+      const body = {
+        sessionId: payload.sessionId,
+        imageId: payload.imageId,
+        message: msg,
+        context: payload.context ?? "study_session",
+        userId: payload.userId,
+        options: payload.options,
+      } as Record<string, unknown>;
+      return http.post(path, body, { signal: opts?.signal, timeoutMs: 60000 });
     },
   },
   // Notes API for saving editor content

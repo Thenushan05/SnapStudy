@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { AuthResponse } from '@/lib/api-types';
 
 interface AuthContextType {
@@ -17,14 +17,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = (data: AuthResponse) => {
     setUser(data.user || null);
     setToken(data.token || null);
-    // In a real app, you'd also persist the token, e.g., in localStorage
+    // Persist to storage for session continuity
+    try {
+      if (data.token) localStorage.setItem('auth_token', data.token);
+      if (data.user) localStorage.setItem('auth_user', JSON.stringify(data.user));
+    } catch (_) {
+      // ignore storage failures
+    }
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
     // Clear the token from storage as well
+    try {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      // Also clear temporary chat stored in sessionStorage
+      sessionStorage.removeItem('chat_messages');
+    } catch (_) {
+      // ignore storage failures
+    }
   };
+
+  // Rehydrate on app load
+  useEffect(() => {
+    try {
+      const storedToken = localStorage.getItem('auth_token');
+      const storedUser = localStorage.getItem('auth_user');
+      if (storedToken) setToken(storedToken);
+      if (storedUser) setUser(JSON.parse(storedUser));
+    } catch (_) {
+      // ignore storage failures
+    }
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, token, login, logout }}>

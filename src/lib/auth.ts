@@ -1,14 +1,35 @@
-import { http } from './http';
-import type { AuthResponse, LoginRequestBody, RegisterRequestBody } from './api-types';
+import { http } from "./http";
+import type {
+  AuthResponse,
+  LoginRequestBody,
+  RegisterRequestBody,
+} from "./api-types";
 
-const BASE_URL = 'https://0429d9b3-d955-4a41-9825-e264e3350a9a.mock.pstmn.io/api';
+const BASE_URL = "http://localhost:5000";
 
 export const authApi = {
   register: (userData: RegisterRequestBody) => {
-    return http.post<AuthResponse, RegisterRequestBody>(`${BASE_URL}/auth/register`, userData);
+    // sanitize inputs to match backend expectations
+    const payload: RegisterRequestBody = {
+      username: userData.username.trim(),
+      email: userData.email.trim().toLowerCase(),
+      password: userData.password,
+    };
+    return http.post<AuthResponse, RegisterRequestBody>(
+      `${BASE_URL}/api/auth/register`,
+      payload
+    );
   },
 
   login: (credentials: LoginRequestBody) => {
-    return http.post<AuthResponse, LoginRequestBody>(`${BASE_URL}/auth/dev-login`, credentials);
+    // sanitize inputs to avoid case issues on email lookup
+    const payload: LoginRequestBody = {
+      email: credentials.email.trim().toLowerCase(),
+      password: credentials.password,
+    };
+    return http.post<AuthResponse, LoginRequestBody>(
+      `${BASE_URL}/api/auth/login`,
+      payload
+    );
   },
 };

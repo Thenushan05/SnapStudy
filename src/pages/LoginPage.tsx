@@ -30,7 +30,7 @@ export default function LoginPage() {
     } catch (error) {
       if (error instanceof HttpError) {
         const apiError = error.body as ApiError;
-        setError(apiError.message || 'An error occurred during login.');
+        setError(apiError.error || apiError.message || 'An error occurred during login.');
       } else {
         setError('An unexpected error occurred.');
       }
