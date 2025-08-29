@@ -5,7 +5,7 @@ import type {
   RegisterRequestBody,
 } from "./api-types";
 
-const BASE_URL = "https://backendsnap-student.vercel.app/";
+const BASE_URL = "https://backendsnap-student.vercel.app";
 
 export const authApi = {
   register: (userData: RegisterRequestBody) => {
