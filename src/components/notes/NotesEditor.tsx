@@ -71,7 +71,51 @@ export function NotesEditor({
     const toastId = `save-${note.id}`;
     try {
       toast("Saving note…", { id: toastId });
-      await api.notes.save({ id: note.id, title, content, tags });
+      // Convert rich HTML to plain text
+      const toPlainText = (html: string) => {
+        const div = document.createElement("div");
+        div.innerHTML = html || "";
+        const text = (div.textContent || div.innerText || "").replace(/\s+/g, " ").trim();
+        return text;
+      };
+      const contentPlain = toPlainText(content);
+      // Include any pending tag input if user typed but didn't press Add/Enter yet
+      const pending = (newTag || "").trim();
+      const baseTags = Array.isArray(tags) ? tags.map(String) : [];
+      const combined = pending && !baseTags.some(t => t.toLowerCase() === pending.toLowerCase())
+        ? [...baseTags, pending]
+        : baseTags;
+      // de-duplicate case-insensitively
+      const seen = new Set<string>();
+      const tagsOut = combined.filter(t => {
+        const k = t.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      const tagsCsv = tagsOut.join(',');
+      const payload = { id: note.id, title, content: contentPlain, tags: tagsOut, tagsCsv };
+      // Debug: verify exact payload being sent
+      console.debug("Saving note payload", payload);
+      const res = await api.notes.save(
+        payload,
+        { path: "/notes/note_123" }
+      );
+      // If server returns updated fields, reflect them locally
+      if (res && typeof res === 'object') {
+        const r = res as Record<string, unknown>;
+        if (typeof r.title === 'string' && r.title !== title) setTitle(r.title);
+        if (typeof r.content === 'string') {
+          // server returns plain text; keep our editor content as-is while reflecting save time
+          // optionally, if you want to mirror server, uncomment next line
+          // setContent(r.content as string);
+        }
+        if (Array.isArray(r.tags)) {
+          setTags((r.tags as unknown[]).map(String));
+        } else if (typeof r.tags === 'string') {
+          setTags(r.tags.split(',').map(s => s.trim()).filter(Boolean));
+        }
+      }
       setLastSavedAt(new Date());
       toast.success("Note saved", { id: toastId });
     } catch (err) {
@@ -80,7 +124,7 @@ export function NotesEditor({
     } finally {
       setIsSaving(false);
     }
-  }, [isSaving, note.id, title, content, tags]);
+  }, [isSaving, note.id, title, content, tags, newTag]);
 
   // Keyboard shortcut: Ctrl/Cmd+S to save
   useEffect(() => {
@@ -314,7 +358,12 @@ export function NotesEditor({
               <Input
                 value={newTag}
                 onChange={(e) => setNewTag(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && addTag()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addTag();
+                  }
+                }}
                 placeholder="Add tag..."
                 className="w-20 h-6 text-xs"
               />

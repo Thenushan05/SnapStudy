@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -71,10 +71,13 @@ interface QuizRunnerProps {
 export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string | number>>({});
-  const [timeLeft, setTimeLeft] = useState(config.timer ? config.timer * 60 : null);
+  const [timeLeft, setTimeLeft] = useState<number | null>(config.timer ? config.timer * 60 : null);
+  const submittedRef = useRef(false);
+  const deadlineRef = useRef<number | null>(null); // epoch ms when quiz should auto-submit
   const [locked, setLocked] = useState<Record<number, boolean>>({});
   const [isCorrectMap, setIsCorrectMap] = useState<Record<number, boolean>>({});
   const [warnedOneMinute, setWarnedOneMinute] = useState(false);
+  const intervalRef = useRef<number | null>(null);
 
   const questions = useMemo<UINormalizedQuestion[]>(() => {
     if (quiz && Array.isArray(quiz.questions) && quiz.questions.length) {
@@ -91,6 +94,8 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
   }, [quiz]);
 
   const handleSubmitQuiz = useCallback(() => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     // inline score computation to avoid extra deps
     let correct = 0;
     questions.forEach((question, index) => {
@@ -118,28 +123,57 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
   }, [answers, questions, config, timeLeft, onComplete]);
 
   useEffect(() => {
-    if (timeLeft === null) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev === null || prev <= 1) {
-          handleSubmitQuiz();
-          return 0;
-        }
-        return prev - 1;
-      });
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (!config.timer) return; // no timer configured
+    // Initialize deadline if needed
+    if (!deadlineRef.current) {
+      const seconds = Math.max(0, Math.floor((config.timer || 0) * 60));
+      deadlineRef.current = Date.now() + seconds * 1000;
+      setTimeLeft(seconds);
+    }
+    // Start a stable interval that doesn't depend on timeLeft
+    const id = window.setInterval(() => {
+      if (submittedRef.current) return;
+      const dl = deadlineRef.current;
+      if (!dl) return;
+      const diffMs = dl - Date.now();
+      const secs = Math.max(0, Math.ceil(diffMs / 1000));
+      setTimeLeft(secs);
+      if (secs <= 0) {
+        handleSubmitQuiz();
+      }
     }, 1000);
+    intervalRef.current = id;
+    return () => {
+      clearInterval(id);
+      intervalRef.current = null;
+    };
+  }, [config.timer, handleSubmitQuiz]);
 
-    return () => clearInterval(timer);
-  }, [timeLeft, handleSubmitQuiz]);
+  // Reset timer and submitted flag when config.timer changes (e.g., new run)
+  useEffect(() => {
+    submittedRef.current = false;
+    if (config.timer && config.timer > 0) {
+      const seconds = Math.max(0, Math.floor(config.timer * 60));
+      deadlineRef.current = Date.now() + seconds * 1000;
+      setTimeLeft(seconds);
+    } else {
+      deadlineRef.current = null;
+      setTimeLeft(null);
+    }
+    setWarnedOneMinute(false);
+  }, [config.timer]);
 
-  // One-time alert when 60 seconds remain
+  // One-time warning state when 60 seconds remain (inline, non-blocking)
   useEffect(() => {
     if (timeLeft === null) return;
     if (!warnedOneMinute && timeLeft === 60) {
       setWarnedOneMinute(true);
-      // Use a simple alert; can be swapped to toast if preferred
-      window.alert("Only 1 minute remaining!");
+      // Non-blocking notice; avoid alert which can pause timers
     }
   }, [timeLeft, warnedOneMinute]);
 
@@ -227,6 +261,11 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
                 </span>
               </div>
             )}
+            {timeLeft !== null && warnedOneMinute && (
+              <div className="text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300">
+                1 minute remaining
+              </div>
+            )}
             <Button variant="outline" onClick={handleSubmitQuiz}>
               <Flag className="w-4 h-4 mr-2" />
               Submit
@@ -255,14 +294,14 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
                     const isCorrectOption = typeof question.correct === 'number' && question.correct === index;
                     let bg = "";
                     if (isLocked) {
-                      if (selected && isCorrectOption) bg = " bg-green-100 border-green-300";
-                      else if (selected && !isCorrectOption) bg = " bg-red-100 border-red-300";
-                      else if (!selected && isCorrectOption) bg = " bg-green-50 border-green-200";
+                      if (selected && isCorrectOption) bg = " bg-green-100 border-green-300 dark:bg-green-900/40 dark:border-green-500";
+                      else if (selected && !isCorrectOption) bg = " bg-red-100 border-red-300 dark:bg-red-900/40 dark:border-red-500";
+                      else if (!selected && isCorrectOption) bg = " bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-600/60";
                     } else {
                       bg = " hover:bg-secondary/50";
                     }
                     return (
-                      <div key={index} className={`flex items-center space-x-2 p-3 rounded-lg border${bg}`}>
+                      <div key={index} className={`flex items-center space-x-2 p-3 rounded-lg border transition-colors${bg}`}>
                         <RadioGroupItem disabled={isLocked} value={index.toString()} id={`option-${index}`} />
                         <Label htmlFor={`option-${index}`} className={`flex-1 ${isLocked ? "cursor-default" : "cursor-pointer"}`}>
                           {option}
@@ -291,9 +330,9 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
               {isLocked && (
                 <div className="mt-4 space-y-2 text-sm">
                   {isCorrect ? (
-                    <div className="text-green-700">Correct!</div>
+                    <div className="text-green-700 dark:text-green-300">Correct!</div>
                   ) : (
-                    <div className="text-red-700">
+                    <div className="text-red-700 dark:text-red-300">
                       Incorrect. { (question.type === "mcq" || question.type === "flashcard") && typeof question.correct === 'number' && question.options ? (
                         <span>Correct answer: <strong>{question.options[question.correct]}</strong></span>
                       ) : (question.type === "short" || question.type === "short-answer") && typeof question.correct === 'string' ? (
@@ -302,7 +341,7 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
                     </div>
                   )}
                   {question.explanation && (
-                    <div className="rounded-md border p-3 bg-muted/40 text-muted-foreground">
+                    <div className="rounded-md border p-3 bg-muted/40 text-muted-foreground dark:bg-zinc-900/60 dark:border-zinc-700">
                       <div className="font-medium text-foreground mb-1">Explanation</div>
                       <div>{question.explanation}</div>
                     </div>

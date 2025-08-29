@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { api } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -6,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Brain, FileText, Upload } from "lucide-react";
+import { Brain, Upload } from "lucide-react";
 
 type QuizRunnerConfig = {
   source: string;
@@ -27,8 +28,12 @@ export function QuizSetup({ onStart }: QuizSetupProps) {
   const [questionCount, setQuestionCount] = useState([10]);
   const [timerEnabled, setTimerEnabled] = useState(false);
   const [timerDuration, setTimerDuration] = useState([30]);
+  const [file, setFile] = useState<File | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleStartQuiz = () => {
+  const handleStartQuiz = async () => {
+    setErr(null);
     const config: QuizRunnerConfig = {
       source,
       quizType,
@@ -36,7 +41,54 @@ export function QuizSetup({ onStart }: QuizSetupProps) {
       questionCount: questionCount[0],
       timer: timerEnabled ? timerDuration[0] : null,
     };
-    onStart(config);
+
+    try {
+      if (source === "upload") {
+        if (!file) {
+          setErr("Please select an image to upload.");
+          return;
+        }
+        setLoading(true);
+        const form = new FormData();
+        form.append("image", file);
+        const res = await api.upload.image(form);
+        const imageId = res.image.id;
+        if (!imageId) {
+          throw new Error("Upload succeeded but no imageId was returned");
+        }
+        const idStr = String(imageId);
+        sessionStorage.setItem("imageId", idStr);
+        sessionStorage.setItem("lastImageId", idStr);
+        sessionStorage.setItem("lastUploadedImageId", idStr);
+        // Process the image before starting the quiz so backend has content ready
+        try {
+          await api.process.image({ imageId: idStr });
+        } catch (e) {
+          // Surface but don't block if processing API returns an error (optional behavior)
+          console.warn("[QuizSetup] process.image failed", e);
+        }
+      } else if (source === "last") {
+        const getSessionImageId = (): string | null => {
+          const keys = ["imageId", "lastImageId", "lastUploadedImageId"]; 
+          for (const k of keys) {
+            const v = sessionStorage.getItem(k);
+            if (v && v.trim()) return v;
+          }
+          return null;
+        };
+        const imageId = getSessionImageId();
+        if (!imageId) {
+          setErr("No last image found. Please upload new content first.");
+          return;
+        }
+      }
+      onStart(config);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to prepare quiz";
+      setErr(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -59,7 +111,7 @@ export function QuizSetup({ onStart }: QuizSetupProps) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <RadioGroup value={source} onValueChange={setSource}>
+            <RadioGroup value={source} onValueChange={(v) => { setSource(v); setErr(null); }}>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="upload" id="upload" />
                 <Label htmlFor="upload">Upload new content</Label>
@@ -68,15 +120,26 @@ export function QuizSetup({ onStart }: QuizSetupProps) {
                 <RadioGroupItem value="last" id="last" />
                 <Label htmlFor="last">Last uploaded image</Label>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="history" id="history" />
-                <Label htmlFor="history">From history</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="text" id="text" />
-                <Label htmlFor="text">Paste text content</Label>
-              </div>
             </RadioGroup>
+            {source === "upload" && (
+              <div className="mt-4">
+                <Label className="mb-2 block">Select image (PNG/JPG)</Label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  className="block w-full text-sm"
+                />
+              </div>
+            )}
+            {source === "last" && (
+              <div className="mt-2 text-sm text-muted">
+                We will use the imageId stored in session.
+              </div>
+            )}
+            {err && (
+              <div className="mt-3 text-sm text-destructive">{err}</div>
+            )}
           </CardContent>
         </Card>
 
@@ -172,8 +235,9 @@ export function QuizSetup({ onStart }: QuizSetupProps) {
           onClick={handleStartQuiz}
           className="w-full h-12 text-lg font-medium"
           size="lg"
+          disabled={loading}
         >
-          Start Quiz
+          {loading ? "Preparing…" : "Start Quiz"}
         </Button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { api } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -87,40 +88,71 @@ export default function StudyPlanPage() {
     emoji: "",
   });
 
-  // Mock data
-  const [sessions, setSessions] = useState<StudySession[]>([
-    {
-      id: "1",
-      title: "Math Revision - Algebra",
-      subject: "Mathematics", 
-      topic: "Quadratic Equations",
-      startDate: new Date(2024, 11, 25, 9, 0),
-      duration: 120,
-      priority: "high",
-      status: "planned",
-      notes: "Focus on factoring methods"
-    },
-    {
-      id: "2", 
-      title: "Biology Study Session",
-      subject: "Biology",
-      topic: "Cell Biology",
-      startDate: new Date(2024, 11, 25, 14, 0),
-      duration: 90,
-      priority: "medium", 
-      status: "completed"
-    },
-    {
-      id: "3",
-      title: "Physics Practice",
-      subject: "Physics",
-      topic: "Mechanics",
-      startDate: new Date(2024, 11, 26, 10, 0),
-      duration: 180,
-      priority: "high",
-      status: "planned"
+  // Sessions loaded from backend
+  const [sessions, setSessions] = useState<StudySession[]>([]);
+
+  // Shared mappers for calendar entries
+  const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+  const toStringSafe = useCallback((v: unknown): string | undefined => (typeof v === 'string' ? v : (v != null ? String(v) : undefined)), []);
+  const toNumberSafe = useCallback((v: unknown): number | undefined => {
+    const n = typeof v === 'number' ? v : (typeof v === 'string' ? Number(v) : NaN);
+    return Number.isFinite(n) ? n : undefined;
+  }, []);
+  const toDateSafe = useCallback((v: unknown): Date | undefined => {
+    if (v instanceof Date) return v;
+    const s = toStringSafe(v);
+    if (!s) return undefined;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? undefined : d;
+  }, [toStringSafe]);
+  const mapEntry = useCallback((o: Record<string, unknown>): StudySession | null => {
+    const id = toStringSafe(o.id) || toStringSafe((o as { _id?: unknown })._id);
+    const title = toStringSafe(o.title) || 'Study Session';
+    const subject = toStringSafe(o.subject) || 'General';
+    const topic = toStringSafe(o.topic) || '';
+    const startDate = toDateSafe(o.startDate) || toDateSafe(o.start) || new Date();
+    const endDate = toDateSafe((o as { endDate?: unknown }).endDate) || toDateSafe((o as { end?: unknown }).end);
+    // Prefer computing duration from endDate when both bounds are present
+    let duration = toNumberSafe(o.duration);
+    if (!duration && startDate && endDate) {
+      const diffMs = endDate.getTime() - startDate.getTime();
+      const mins = Math.max(0, Math.round(diffMs / 60000));
+      duration = Number.isFinite(mins) && mins > 0 ? mins : undefined;
     }
-  ]);
+    duration = duration ?? 60;
+    const priorityRaw = toStringSafe(o.priority) as ("high"|"medium"|"low"|undefined);
+    const priority: "high"|"medium"|"low" = (priorityRaw === 'high' || priorityRaw === 'medium' || priorityRaw === 'low') ? priorityRaw : 'medium';
+    const statusRaw = toStringSafe((o as { status?: unknown }).status) as ("planned"|"completed"|"missed"|undefined);
+    const status: "planned"|"completed"|"missed" = (statusRaw === 'planned' || statusRaw === 'completed' || statusRaw === 'missed') ? statusRaw : 'planned';
+    const notes = toStringSafe(o.notes);
+    const color = toStringSafe(o.color);
+    const emoji = toStringSafe(o.emoji);
+    if (!id || !startDate) return null;
+    return { id, title, subject, topic, startDate, duration, priority, status, notes, color, emoji };
+  }, [toStringSafe, toNumberSafe, toDateSafe]);
+
+  const refreshEntries = useCallback(async (signal?: AbortSignal) => {
+    const res = await api.calendar.entries({ signal });
+    const root = res as unknown;
+    let entries: unknown[] = [];
+    if (Array.isArray(root)) {
+      entries = root as unknown[];
+    } else if (isObj(root)) {
+      const r = root as Record<string, unknown> & { data?: unknown; calendar?: unknown; sessions?: unknown };
+      if (Array.isArray(r.data)) {
+        entries = r.data as unknown[];
+      } else if (Array.isArray(r.calendar)) {
+        entries = r.calendar as unknown[];
+      } else if (Array.isArray(r.sessions)) {
+        entries = r.sessions as unknown[];
+      }
+    }
+    const mapped = entries
+      .filter(isObj)
+      .map((o) => mapEntry(o))
+      .filter((x): x is StudySession => !!x);
+    setSessions(mapped);
+  }, [mapEntry]);
 
   const subjectColor = (subject: string) => {
     const key = subject.toLowerCase();
@@ -261,7 +293,7 @@ export default function StudyPlanPage() {
     setIsAddModalOpen(true);
   };
 
-  const saveSession = () => {
+  const saveSession = async () => {
     if (!form.title || !form.subject || !form.start) {
       setFormError("Please fill Title, Subject, and Start date/time.");
       return;
@@ -279,8 +311,26 @@ export default function StudyPlanPage() {
     if (editingId) {
       setSessions(prev => prev.map(s => s.id === editingId ? { ...s, title: form.title, subject: form.subject, topic: form.topic, startDate, duration: Number(form.duration), priority: form.priority, notes: form.notes, color: form.color || s.color, emoji: form.emoji || s.emoji } : s));
     } else {
-      const id = Math.random().toString(36).slice(2);
-      setSessions(prev => [...prev, { id, title: form.title, subject: form.subject, topic: form.topic, startDate, duration: Number(form.duration), priority: form.priority, status: 'planned', notes: form.notes, color: form.color || undefined, emoji: form.emoji || undefined }]);
+      // Create on server calendar, then refresh entries to reflect backend
+      try {
+        await api.calendar.create({
+          title: form.title,
+          subject: form.subject,
+          topic: form.topic,
+          startDate: startDate.toISOString(),
+          duration: Number(form.duration),
+          priority: form.priority,
+          notes: form.notes || undefined,
+          color: form.color || undefined,
+          emoji: form.emoji || undefined,
+        });
+        await refreshEntries();
+      } catch (e) {
+        // Non-blocking – fall back to local optimistic insert if create fails
+        console.warn("/api/calendar/create failed; keeping local entry", e);
+        const id = Math.random().toString(36).slice(2);
+        setSessions(prev => [...prev, { id, title: form.title, subject: form.subject, topic: form.topic, startDate, duration: Number(form.duration), priority: form.priority, status: 'planned', notes: form.notes, color: form.color || undefined, emoji: form.emoji || undefined }]);
+      }
     }
     setFormError("");
     setIsAddModalOpen(false);
@@ -296,6 +346,19 @@ export default function StudyPlanPage() {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Fetch calendar entries from backend and populate sessions
+  useEffect(() => {
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        await refreshEntries(ctrl.signal);
+      } catch (err) {
+        console.warn('[calendar] failed to load entries', err);
+      }
+    })();
+    return () => ctrl.abort();
+  }, [refreshEntries]);
 
   // Recompute maxDuration whenever start datetime or visible range changes
   useEffect(() => {
@@ -785,24 +848,28 @@ export default function StudyPlanPage() {
                           </div>
                         ))}
                         
-                        {/* Calendar Days */}
-                        {Array.from({ length: 35 }, (_, i) => {
-                          const date = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), i - 6);
-                          const isCurrentMonth = date.getMonth() === selectedDate.getMonth();
-                          const isToday = date.toDateString() === new Date().toDateString();
-                          const isPastDay = date < todayStart; // entire day in the past
-                          const daysSessions = sessions.filter(s => s.startDate.toDateString() === date.toDateString());
-                          return (
-                            <CalendarDayCell
-                              key={i}
-                              date={date}
-                              isCurrentMonth={isCurrentMonth}
-                              isToday={isToday}
-                              isPastDay={isPastDay}
-                              daysSessions={daysSessions}
-                            />
-                          );
-                        })}
+                        {/* Calendar Days (6 weeks = 42 days), starting from the week containing day 1 */}
+                        {(() => {
+                          const firstOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+                          const gridStart = startOfWeek(firstOfMonth);
+                          return Array.from({ length: 42 }, (_, i) => {
+                            const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+                            const isCurrentMonth = date.getMonth() === selectedDate.getMonth();
+                            const isToday = date.toDateString() === new Date().toDateString();
+                            const isPastDay = date < todayStart; // entire day in the past
+                            const daysSessions = sessions.filter(s => s.startDate.toDateString() === date.toDateString());
+                            return (
+                              <CalendarDayCell
+                                key={i}
+                                date={date}
+                                isCurrentMonth={isCurrentMonth}
+                                isToday={isToday}
+                                isPastDay={isPastDay}
+                                daysSessions={daysSessions}
+                              />
+                            );
+                          });
+                        })()}
                     </div>
                   </div>
                 </div>

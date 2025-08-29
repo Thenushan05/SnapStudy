@@ -4,8 +4,21 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Trophy, Clock, Target, RotateCcw, Download, BookOpen } from "lucide-react";
 
+type QuizResultsData = {
+  score: number;
+  timeSpent: number;
+  answers: Record<number, string | number>;
+  questions: Array<{
+    type: string;
+    question: string;
+    options?: string[];
+    correct: number | string;
+  }>;
+  config: { timer?: number | null };
+};
+
 interface QuizResultsProps {
-  results: any;
+  results: QuizResultsData;
   onRestart: () => void;
 }
 
@@ -99,7 +112,7 @@ export function QuizResults({ results, onRestart }: QuizResultsProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {questions.map((question: any, index: number) => {
+            {questions.map((question, index: number) => {
               const userAnswer = answers[index];
               const isCorrect = question.type === "mcq" 
                 ? userAnswer === question.correct
@@ -112,8 +125,8 @@ export function QuizResults({ results, onRestart }: QuizResultsProps) {
                       {index + 1}. {question.question}
                     </h4>
                     <Badge 
-                      variant={isCorrect ? "default" : "destructive"}
-                      className={isCorrect ? "bg-success" : ""}
+                      variant="default"
+                      className={isCorrect ? "bg-green-600 text-white dark:bg-green-500" : "bg-red-600 text-white dark:bg-red-500"}
                     >
                       {isCorrect ? "Correct" : "Incorrect"}
                     </Badge>
@@ -123,7 +136,7 @@ export function QuizResults({ results, onRestart }: QuizResultsProps) {
                     <div className="text-sm text-muted">
                       <div>Your answer: {question.options?.[userAnswer] || "Not answered"}</div>
                       {!isCorrect && (
-                        <div className="text-success">
+                        <div className="text-success dark:text-green-400">
                           Correct answer: {question.options?.[question.correct]}
                         </div>
                       )}
@@ -140,7 +153,7 @@ export function QuizResults({ results, onRestart }: QuizResultsProps) {
       <div className="flex flex-wrap gap-4 justify-center">
         <Button onClick={onRestart} className="gap-2">
           <RotateCcw className="w-4 h-4" />
-          Take Quiz Again
+          Back to Setup
         </Button>
         
         <Button variant="outline" className="gap-2">

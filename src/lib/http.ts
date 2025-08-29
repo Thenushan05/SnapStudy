@@ -62,12 +62,25 @@ export async function request<TResponse = unknown, TBody = unknown>(
   const { method = "GET", headers, query, body, signal, timeoutMs } = opts;
   const url = buildUrl(path, query);
 
+  // Build headers and inject Authorization if we have a stored token
+  const builtHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(headers || {}),
+  };
+  try {
+    // Only set Authorization if not explicitly provided
+    const hasAuthHeader = Object.keys(builtHeaders).some((k) => k.toLowerCase() === "authorization");
+    if (!hasAuthHeader) {
+      const token = localStorage.getItem('auth_token');
+      if (token) builtHeaders["Authorization"] = `Bearer ${token}`;
+    }
+  } catch (_) {
+    // Accessing localStorage can fail in some environments; ignore
+  }
+
   const init: RequestInit = {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(headers || {}),
-    },
+    headers: builtHeaders,
     signal,
   };
 

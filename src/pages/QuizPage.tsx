@@ -35,7 +35,23 @@ export default function QuizPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await quizApi.get();
+      const getSessionImageId = (): string | null => {
+        const keys = [
+          "imageId",
+          "lastImageId",
+          "lastUploadedImageId",
+        ];
+        for (const k of keys) {
+          const v = sessionStorage.getItem(k);
+          if (v && v.trim()) return v;
+        }
+        return null;
+      };
+      const imageId = getSessionImageId();
+      if (!imageId) {
+        throw new Error("No imageId found in session — upload first or set sessionStorage.imageId");
+      }
+      const data = await quizApi.byImage(imageId);
       setQuiz(data);
       setMode("running");
     } catch (e) {

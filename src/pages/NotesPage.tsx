@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NotesEditor } from "@/components/notes/NotesEditor";
 import { NotesSidebar } from "@/components/notes/NotesSidebar";
+import { api } from "@/lib/api";
 
 interface Note {
   id: string;
@@ -12,22 +13,39 @@ interface Note {
 
 export default function NotesPage() {
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [notes, setNotes] = useState<Note[]>([
-    {
-      id: "1",
-      title: "Math Notes - Chapter 5",
-      content: "# Quadratic Equations\n\nA quadratic equation is a polynomial equation of degree 2...",
-      updatedAt: new Date(),
-      tags: ["Mathematics", "Algebra"]
-    },
-    {
-      id: "2", 
-      title: "Biology Study Guide",
-      content: "# Cell Biology\n\n## Cellular Respiration\n\nThe process by which cells break down glucose...",
-      updatedAt: new Date(),
-      tags: ["Biology", "Cell Biology"]
-    }
-  ]);
+  const [notes, setNotes] = useState<Note[]>([]);
+
+  // Load the canonical note from /notes/note_123
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      try {
+        const data = await api.notes.get({ path: "/notes/note_123" });
+        if (aborted) return;
+        const o = (data && typeof data === 'object') ? (data as Record<string, unknown>) : {};
+        const id = typeof o.id === 'string' ? o.id : 'note_123';
+        const title = typeof o.title === 'string' ? o.title : 'Untitled Note';
+        const content = typeof o.content === 'string' ? o.content : '# New Note\n\nStart writing...';
+        const tags = Array.isArray(o.tags) ? (o.tags as unknown[]).map(String) : [];
+        const updatedAtStr = (typeof o.updatedAt === 'string' ? o.updatedAt : undefined) || new Date().toISOString();
+        const note: Note = { id, title, content, tags, updatedAt: new Date(updatedAtStr) };
+        setNotes([note]);
+        setSelectedNoteId(id);
+      } catch (err) {
+        console.warn('Failed to load /notes/note_123, using local fallback', err);
+        const fallback: Note = {
+          id: 'note_123',
+          title: 'Untitled Note',
+          content: '# New Note\n\nStart writing...',
+          tags: [],
+          updatedAt: new Date(),
+        };
+        setNotes([fallback]);
+        setSelectedNoteId('note_123');
+      }
+    })();
+    return () => { aborted = true; };
+  }, []);
 
   const selectedNote = notes.find(note => note.id === selectedNoteId);
 

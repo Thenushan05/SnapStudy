@@ -16,6 +16,7 @@ export interface Message {
   content: string;
   timestamp?: Date;
   action?: MessageAction;
+  animate?: boolean; // if false, do not animate even if last assistant
 }
 
 interface ChatThreadProps {
@@ -116,6 +117,15 @@ export function ChatThread({ messages, isLoading, onRetryProcess }: ChatThreadPr
       return;
     }
     const last = messages[lastAssistantIndex];
+    // Respect explicit animate flag
+    if (last?.type === "assistant" && last?.animate === false) {
+      setIsAnimating(false);
+      setTypedText("");
+      // Still set the key so subsequent identical content doesn't animate
+      const keyNoAnim = `${last?.content ?? ""}|${(last?.timestamp as Date | undefined)?.getTime?.() ?? ""}`;
+      prevAssistantKeyRef.current = keyNoAnim;
+      return;
+    }
     const key = `${last?.content ?? ""}|${(last?.timestamp as Date | undefined)?.getTime?.() ?? ""}`;
     if (key === prevAssistantKeyRef.current) {
       // Same last assistant as before; don't animate

@@ -29,12 +29,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setUser(null);
     setToken(null);
-    // Clear the token from storage as well
+    // Clear all app storage on logout
     try {
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('auth_user');
-      // Also clear temporary chat stored in sessionStorage
-      sessionStorage.removeItem('chat_messages');
+      localStorage.clear();
+      sessionStorage.clear();
     } catch (_) {
       // ignore storage failures
     }
