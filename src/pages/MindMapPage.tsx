@@ -88,8 +88,8 @@ export default function MindMapPage() {
       try {
         setLoading(true);
         setError(null);
-        // Resolve imageId from sessionStorage
-        const keys = ["imageId", "lastImageId", "lastUploadedImageId"] as const;
+        // Resolve imageId from sessionStorage (prefer lastImageId, then imageId)
+        const keys = ["lastImageId", "imageId"] as const;
         let imageId: string | null = null;
         for (const k of keys) {
           const v = sessionStorage.getItem(k);

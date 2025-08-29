@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,21 @@ export function QuizSetup({ onStart }: QuizSetupProps) {
   const [file, setFile] = useState<File | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [availableIds, setAvailableIds] = useState<string[]>([]);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+
+  // Load quiz-specific uploaded IDs
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("quizUploadedImageIds");
+      const arr = raw ? (JSON.parse(raw) as string[]) : [];
+      setAvailableIds(arr);
+    } catch {
+      setAvailableIds([]);
+    }
+    const sel = sessionStorage.getItem("quizSelectedImageId");
+    setSelectedImageId(sel && sel.trim() ? sel : null);
+  }, []);
 
   const handleStartQuiz = async () => {
     setErr(null);
@@ -59,7 +74,19 @@ export function QuizSetup({ onStart }: QuizSetupProps) {
         const idStr = String(imageId);
         sessionStorage.setItem("imageId", idStr);
         sessionStorage.setItem("lastImageId", idStr);
-        sessionStorage.setItem("lastUploadedImageId", idStr);
+        // Maintain quiz-only list of uploaded ids and current selection
+        try {
+          const raw = sessionStorage.getItem("quizUploadedImageIds");
+          const list = raw ? (JSON.parse(raw) as string[]) : [];
+          if (!list.includes(idStr)) list.push(idStr);
+          sessionStorage.setItem("quizUploadedImageIds", JSON.stringify(list));
+          setAvailableIds(list);
+        } catch {
+          sessionStorage.setItem("quizUploadedImageIds", JSON.stringify([idStr]));
+          setAvailableIds([idStr]);
+        }
+        sessionStorage.setItem("quizSelectedImageId", idStr);
+        setSelectedImageId(idStr);
         // Process the image before starting the quiz so backend has content ready
         try {
           await api.process.image({ imageId: idStr });
@@ -68,19 +95,14 @@ export function QuizSetup({ onStart }: QuizSetupProps) {
           console.warn("[QuizSetup] process.image failed", e);
         }
       } else if (source === "last") {
-        const getSessionImageId = (): string | null => {
-          const keys = ["imageId", "lastImageId", "lastUploadedImageId"]; 
-          for (const k of keys) {
-            const v = sessionStorage.getItem(k);
-            if (v && v.trim()) return v;
-          }
-          return null;
-        };
-        const imageId = getSessionImageId();
-        if (!imageId) {
+        // Always use the global lastImageId for this branch
+        const imageId = sessionStorage.getItem("lastImageId");
+        if (!imageId || !imageId.trim()) {
           setErr("No last image found. Please upload new content first.");
           return;
         }
+        // Optionally persist the choice for consistency
+        sessionStorage.setItem("quizSelectedImageId", imageId);
       }
       onStart(config);
     } catch (e: unknown) {
@@ -133,8 +155,8 @@ export function QuizSetup({ onStart }: QuizSetupProps) {
               </div>
             )}
             {source === "last" && (
-              <div className="mt-2 text-sm text-muted">
-                We will use the imageId stored in session.
+              <div className="mt-4 text-sm text-muted-foreground">
+                The quiz will use your most recent upload (lastImageId).
               </div>
             )}
             {err && (

@@ -344,6 +344,19 @@ export const api = {
       } as Record<string, unknown>;
       return http.post(path, body, { signal: opts?.signal, timeoutMs: 60000 });
     },
+    async postHistory(
+      payload: { sessionId: string; role: 'user' | 'assistant'; text: string; messageType?: string },
+      opts?: { signal?: AbortSignal; path?: string }
+    ): Promise<{ success?: boolean; message?: string }> {
+      if (!payload?.sessionId) throw new Error("sessionId is required");
+      const path = opts?.path ?? `/api/sessions/${encodeURIComponent(payload.sessionId)}/chat`;
+      const body = {
+        role: payload.role,
+        text: payload.text,
+        messageType: payload.messageType ?? 'chat',
+      } as const;
+      return http.post(path, body, { signal: opts?.signal, timeoutMs: 20000 });
+    },
   },
   // Notes API for saving editor content
   notes: {

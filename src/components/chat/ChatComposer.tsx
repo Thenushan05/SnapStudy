@@ -2,17 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Send,
-  Paperclip,
-  Mic,
-  Camera,
-  X,
-  Flashlight,
-  FlashlightOff,
-  Timer,
-  TimerOff,
-} from "lucide-react";
+import { Send, Paperclip, Mic, Camera, X, Flashlight, FlashlightOff, Timer, TimerOff, Plus } from "lucide-react";
 
 interface ChatComposerProps {
   onSend: (message: string) => void;
@@ -47,6 +37,10 @@ export function ChatComposer({
   const [torchOn, setTorchOn] = useState(false);
   const [timerOn, setTimerOn] = useState(false); // 3s timer when true
   const [countdown, setCountdown] = useState<number | null>(null);
+  // Chat image picker state (uses last1/last2/last3 from sessionStorage)
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [entries, setEntries] = useState<Array<{ key: string; id: string; name?: string }>>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const isLiveStream = (s: MediaStream | null) => {
     if (!s) return false;
@@ -171,6 +165,46 @@ export function ChatComposer({
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
+  };
+
+  const refreshEntries = () => {
+    const keys = ["last1", "last2", "last3"];
+    const list: Array<{ key: string; id: string; name?: string }> = [];
+    for (const k of keys) {
+      const raw = sessionStorage.getItem(k);
+      if (!raw) continue;
+      try {
+        const obj = JSON.parse(raw) as { id: string; name?: string };
+        if (obj?.id) list.push({ key: k, id: obj.id, name: obj.name });
+      } catch {
+        // ignore bad entry
+      }
+    }
+    setEntries(list);
+  };
+
+  useEffect(() => {
+    try {
+      const sid = sessionStorage.getItem("selectedImageId");
+      setSelectedId(sid && sid.trim() ? sid : null);
+    } catch { /* ignore */ }
+  }, []);
+
+  const togglePicker = () => {
+    if (!pickerOpen) refreshEntries();
+    setPickerOpen((v) => !v);
+  };
+
+  const chooseImageId = (id: string) => {
+    sessionStorage.setItem("selectedImageId", id);
+    setSelectedId(id);
+    setPickerOpen(false);
+  };
+
+  const clearSelected = () => {
+    sessionStorage.removeItem("selectedImageId");
+    setSelectedId(null);
+    setPickerOpen(false);
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -522,6 +556,55 @@ export function ChatComposer({
               document.body
             )}
           <div className="absolute bottom-2 sm:bottom-3 right-2 sm:right-3 flex gap-1.5 sm:gap-2">
+            <div className="relative">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={`w-8 h-8 ${selectedId ? "text-primary" : ""}`}
+                disabled={disabled}
+                onClick={togglePicker}
+                aria-label="Pick last uploaded image"
+                title={selectedId ? `Selected id: ${selectedId}` : "Pick last uploaded image"}
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+              {pickerOpen && (
+                <div className="absolute bottom-10 right-0 z-50 w-64 max-h-60 overflow-auto rounded-md border border-border bg-popover shadow-md p-2 text-xs">
+                  <div className="mb-2 font-medium">Choose recent upload</div>
+                  {entries.length === 0 ? (
+                    <div className="text-muted-foreground">No recent uploads</div>
+                  ) : (
+                    <ul className="space-y-1">
+                      {entries.map((e) => (
+                        <li key={e.key}>
+                          <button
+                            type="button"
+                            onClick={() => chooseImageId(e.id)}
+                            className={`w-full text-left px-2 py-1 rounded hover:bg-muted ${selectedId === e.id ? "bg-muted" : ""}`}
+                          >
+                            <div className="truncate">
+                              <span className="font-medium">{e.name || e.id}</span>
+                            </div>
+                            <div className="truncate text-muted-foreground">{e.id}</div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="mt-2 flex justify-between">
+                    <button type="button" className="px-2 py-1 rounded hover:bg-muted" onClick={() => setPickerOpen(false)}>
+                      Close
+                    </button>
+                    {selectedId && (
+                      <button type="button" className="px-2 py-1 rounded hover:bg-muted text-destructive" onClick={clearSelected}>
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <Button
               variant="ghost"
               size="icon"

@@ -3,15 +3,31 @@ import { ChatThread, type Message } from "@/components/chat/ChatThread";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { UploadDropzone } from "@/components/upload/UploadDropzone";
 import { api } from "@/lib/api";
+import { HttpError } from "@/lib/http";
 import { toast } from "sonner";
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const expiryTimerRef = useRef<number | null>(null);
+  // Track restored count and synced count for history posting
+  const restoredCountRef = useRef(0);
+  const historySyncedRef = useRef(0);
+  const warnedSessionRef = useRef(false);
 
   const CHAT_STORAGE_KEY = "chat_messages";
   const CHAT_TTL_MS = 60 * 60 * 1000; // 60 minutes
+
+  // Helper to persist sessionId with debug logs
+  const setSessionId = useCallback((sid: string) => {
+    if (!sid) return;
+    try {
+      sessionStorage.setItem("lastSessionId", sid);
+      console.debug("[chat] stored sessionId:", sid);
+    } catch (e) {
+      console.warn("[chat] failed to store sessionId", e);
+    }
+  }, []);
 
   function clearChatStorage() {
     try {
@@ -95,6 +111,7 @@ export default function ChatPage() {
     const restored = loadChat();
     if (restored && restored.length) {
       setMessages(restored);
+      restoredCountRef.current = restored.length;
     }
     scheduleExpiry();
     return () => {
@@ -116,6 +133,39 @@ export default function ChatPage() {
     }
   }, [messages, scheduleExpiry]);
 
+  // Post chat history on every new message appended (skip restored-on-mount)
+  useEffect(() => {
+    const sessionId = sessionStorage.getItem("lastSessionId") || "";
+    if (!sessionId) return;
+    // Skip the messages restored on mount
+    if (historySyncedRef.current === 0 && restoredCountRef.current > 0) {
+      historySyncedRef.current = restoredCountRef.current;
+    }
+    if (messages.length > historySyncedRef.current) {
+      const batch = messages.slice(historySyncedRef.current);
+      batch.forEach((m) => {
+        if (m?.type === "user" || m?.type === "assistant") {
+          api.chat
+            .postHistory({ sessionId, role: m.type, text: m.content })
+            .catch((e) => {
+              if (e instanceof HttpError && e.status === 404) {
+                // Session not found -> warn once (do not clear to aid debugging)
+                if (!warnedSessionRef.current) {
+                  warnedSessionRef.current = true;
+                  toast.error(
+                    "Chat session expired or missing. Please upload/process again to start a new session."
+                  );
+                }
+              } else {
+                console.warn("postHistory failed", e);
+              }
+            });
+        }
+      });
+      historySyncedRef.current = messages.length;
+    }
+  }, [messages]);
+
   async function retryProcess() {
     const imageId = sessionStorage.getItem("lastImageId");
     if (!imageId) {
@@ -127,7 +177,7 @@ export default function ChatPage() {
       toast("Re-trying processing…");
       const proc = await api.process.image({ imageId });
       const sessionId = proc.data?.sessionId;
-      if (sessionId) sessionStorage.setItem("lastSessionId", sessionId);
+      if (sessionId) setSessionId(sessionId);
       const evidenceCount = Number(proc.data?.evidenceCount ?? 0);
       if (evidenceCount === 0) {
         setMessages((prev) => [
@@ -184,6 +234,25 @@ export default function ChatPage() {
       const imageId = up.image.id;
       const imageUrl = up.image.url;
       sessionStorage.setItem("lastImageId", imageId);
+      // Maintain last 3 uploads for chat picker as last1/last2/last3
+      try {
+        const parseEntry = (key: string) => {
+          const v = sessionStorage.getItem(key);
+          if (!v) return null;
+          try { return JSON.parse(v) as { id: string; name?: string }; } catch { return null; }
+        };
+        const e1 = parseEntry("last1");
+        const e2 = parseEntry("last2");
+        // shift down and insert new at last1
+        if (e2) sessionStorage.setItem("last3", JSON.stringify(e2));
+        if (e1) sessionStorage.setItem("last2", JSON.stringify(e1));
+        sessionStorage.setItem("last1", JSON.stringify({ id: imageId, name: file.name }));
+      } catch (e) {
+        console.warn("failed to update last1/2/3", e);
+        try { sessionStorage.setItem("last1", JSON.stringify({ id: imageId, name: file.name })); } catch { /* ignore */ }
+      }
+      // If upload returns a sessionId, store it
+      if (up.image.sessionId) setSessionId(String(up.image.sessionId));
       setMessages((prev) => [
         ...prev,
         {
@@ -201,7 +270,7 @@ export default function ChatPage() {
       // Call process API
       const proc = await api.process.image({ imageId });
       const sessionId = proc.data?.sessionId;
-      if (sessionId) sessionStorage.setItem("lastSessionId", sessionId);
+      if (sessionId) setSessionId(sessionId);
       const evidenceCount = Number(proc.data?.evidenceCount ?? 0);
       if (evidenceCount === 0) {
         setMessages((prev) => [
@@ -276,11 +345,13 @@ export default function ChatPage() {
           const text = message.trim();
           if (!text) return;
           const sessionId = sessionStorage.getItem("lastSessionId") || "";
-          const imageId = sessionStorage.getItem("lastImageId") || "";
+          const selected = sessionStorage.getItem("selectedImageId") || "";
+          const imageId = selected || sessionStorage.getItem("lastImageId") || "";
           setMessages((prev) => [
             ...prev,
             { type: "user", content: text, timestamp: new Date() },
           ]);
+          // history posting handled by centralized useEffect
 
           if (!sessionId || !imageId) {
             toast.error("Please upload an image first to start a chat.");
@@ -299,8 +370,7 @@ export default function ChatPage() {
             setIsLoading(true);
             const res = await api.chat.rag({ sessionId, imageId, text });
             const newSessionId = res.data?.sessionId;
-            if (newSessionId)
-              sessionStorage.setItem("lastSessionId", newSessionId);
+            if (newSessionId) setSessionId(newSessionId);
             const reply =
               res.data?.response?.content ||
               res.data?.reply ||
@@ -315,15 +385,19 @@ export default function ChatPage() {
                 animate: true,
               },
             ]);
+            // history posting handled by centralized useEffect
 
-            // After chat response, fetch updated mind map (from /mindmap)
+            // After chat response, fetch updated mind map using last image id
             try {
-              const nodes = await api.mindmap.get();
-              // Save to session for any mindmap view to pick up
-              sessionStorage.setItem(
-                "mindmap_nodes",
-                JSON.stringify({ nodes, savedAt: Date.now() })
-              );
+              const imgId = sessionStorage.getItem("lastImageId") || imageId;
+              if (imgId) {
+                const nodes = await api.mindmap.byImage(imgId);
+                // Save to session for any mindmap view to pick up
+                // sessionStorage.setItem(
+                //   "mindmap_nodes",
+                //   JSON.stringify({ nodes, savedAt: Date.now() })
+                // );
+              }
             } catch (e) {
               // Non-blocking: ignore failures silently or log
               console.warn("mindmap fetch failed", e);

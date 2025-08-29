@@ -93,8 +93,7 @@ export function NotesEditor({
         seen.add(k);
         return true;
       });
-      const tagsCsv = tagsOut.join(',');
-      const payload = { id: note.id, title, content: contentPlain, tags: tagsOut, tagsCsv };
+      const payload = { id: note.id, title, content: contentPlain, tags: tagsOut };
       // Debug: verify exact payload being sent
       console.debug("Saving note payload", payload);
       const res = await api.notes.save(
