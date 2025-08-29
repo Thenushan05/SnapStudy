@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { addStickyFromText } from "@/lib/stickyStorage";
-import { User, Bot, StickyNote, Copy } from "lucide-react";
+import { api } from "@/lib/api";
+import { User, Bot, StickyNote, Copy, Pin, Image as ImageIcon } from "lucide-react";
 
 export interface MessageAction {
   type: "retryProcess";
@@ -17,6 +19,14 @@ export interface Message {
   timestamp?: Date;
   action?: MessageAction;
   animate?: boolean; // if false, do not animate even if last assistant
+  evidence?: Array<{
+    id: string;
+    text: string;
+    confidence?: number;
+    bbox?: unknown;
+    ocrMethod?: string;
+  }>;
+  tag?: "upload" | "summary" | "info";
 }
 
 interface ChatThreadProps {
@@ -31,6 +41,10 @@ export function ChatThread({ messages, isLoading, onRetryProcess }: ChatThreadPr
   const [isAnimating, setIsAnimating] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const prevAssistantKeyRef = useRef<string | null>(null);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [currentEvidence, setCurrentEvidence] = useState<
+    Array<{ id: string; text: string; confidence?: number; bbox?: unknown; ocrMethod?: string }>
+  >([]);
 
   // Simple markdown-lite renderer: supports #, ##, ###, -, *, **bold**, *italic*
   const renderMarkdownLite = (text: string) => {
@@ -162,13 +176,25 @@ export function ChatThread({ messages, isLoading, onRetryProcess }: ChatThreadPr
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading, typedText]);
-  const handleAddToSticky = (text: string) => {
-    const note = addStickyFromText(text, { color: "yellow" });
-    toast({
-      title: "Added to Sticky Notes",
-      description: "Your assistant message was saved as a sticky note.",
-    });
-    return note;
+  const handleAddToSticky = async (text: string) => {
+    try {
+      const sessionId = sessionStorage.getItem("lastSessionId") || "";
+      if (!sessionId) throw new Error("missing sessionId");
+      await api.bookmarks.createRef({
+        refType: "session",
+        refId: sessionId,
+        title: "Important Study Session",
+        description: text,
+        note: "Focus on nodes 2 and 3",
+        priority: "high",
+        tags: ["important", "review"],
+      });
+      toast({ title: "Bookmarked", description: "Saved to bookmarks for this session." });
+    } catch (e) {
+      // Fallback to local storage when server unavailable or no sessionId present
+      addStickyFromText(text, { color: "yellow" });
+      toast({ title: "Saved locally", description: "Bookmark saved offline (no session).", variant: "default" });
+    }
   };
   const handleCopy = async (text: string) => {
     try {
@@ -196,12 +222,36 @@ export function ChatThread({ messages, isLoading, onRetryProcess }: ChatThreadPr
           )}
           
           <div
-            className={`max-w-2xl px-4 py-3 rounded-2xl ${
+            className={`relative max-w-2xl px-4 py-3 rounded-2xl ${
               message.type === "user"
                 ? "bg-accent text-white"
                 : "bg-surface border border-border"
+            } ${
+              message.type === "assistant" && message.evidence && message.evidence.length > 0
+                ? "pr-10"
+                : ""
             }`}
           >
+            {message.type === "assistant" && message.evidence && message.evidence.length > 0 && (
+              <div className="absolute top-2 right-2 z-10">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Show evidence"
+                        className="w-7 h-7"
+                        onClick={() => { setCurrentEvidence(message.evidence!); setEvidenceOpen(true); }}
+                      >
+                        <Pin className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Show evidence</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            )}
             {index === lastAssistantIndex && message.type === "assistant" && isAnimating ? (
               <p className="text-sm leading-relaxed">
                 {typedText}
@@ -212,7 +262,18 @@ export function ChatThread({ messages, isLoading, onRetryProcess }: ChatThreadPr
                 </span>
               </p>
             ) : (
-              <div className="text-sm">{message.type === "assistant" ? renderMarkdownLite(message.content) : <p className="leading-relaxed">{message.content}</p>}</div>
+              <div className="text-sm">
+                {message.type === "assistant" ? (
+                  <div className="flex items-start gap-2">
+                    {message.tag === "upload" && (
+                      <ImageIcon className="w-4 h-4 mt-0.5 text-muted" />
+                    )}
+                    <div className="min-w-0 flex-1">{renderMarkdownLite(message.content)}</div>
+                  </div>
+                ) : (
+                  <p className="leading-relaxed">{message.content}</p>
+                )}
+              </div>
             )}
             {message.type === "assistant" && (
               <div className="mt-2 flex gap-1">
@@ -287,11 +348,37 @@ export function ChatThread({ messages, isLoading, onRetryProcess }: ChatThreadPr
               <div className="w-2 h-2 bg-muted rounded-full animate-pulse"></div>
               <div className="w-2 h-2 bg-muted rounded-full animate-pulse delay-100"></div>
               <div className="w-2 h-2 bg-muted rounded-full animate-pulse delay-200"></div>
-            </div>
           </div>
         </div>
-      )}
-      <div ref={bottomRef} />
-    </div>
-  );
+      </div>
+    )}
+    <div ref={bottomRef} />
+
+    {/* Evidence Dialog */}
+    <Dialog open={evidenceOpen} onOpenChange={setEvidenceOpen}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Extracted Evidence</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-[60vh] overflow-y-auto space-y-3">
+          {currentEvidence.length === 0 ? (
+            <p className="text-sm text-muted">No evidence available.</p>
+          ) : (
+            currentEvidence.map((ev) => (
+              <div key={ev.id} className="p-3 rounded-md border border-border bg-card">
+                <p className="text-sm whitespace-pre-wrap">{ev.text}</p>
+                {typeof ev.confidence === "number" && (
+                  <p className="mt-1 text-xs text-muted">Confidence: {(ev.confidence * 100).toFixed(1)}%</p>
+                )}
+                {ev.ocrMethod && (
+                  <p className="mt-1 text-xs text-muted">OCR: {ev.ocrMethod}</p>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  </div>
+);
 }

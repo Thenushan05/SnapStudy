@@ -299,7 +299,8 @@ export default function StudyPlanPage() {
       return;
     }
     const startDate = new Date(form.start);
-    if (startDate < new Date()) {
+    // Allow editing past sessions; only block creating new sessions in the past
+    if (!editingId && startDate < new Date()) {
       setFormError("Start date/time cannot be in the past.");
       return;
     }
@@ -309,7 +310,24 @@ export default function StudyPlanPage() {
       return;
     }
     if (editingId) {
+      // Optimistic update locally, then always attempt PUT to server
       setSessions(prev => prev.map(s => s.id === editingId ? { ...s, title: form.title, subject: form.subject, topic: form.topic, startDate, duration: Number(form.duration), priority: form.priority, notes: form.notes, color: form.color || s.color, emoji: form.emoji || s.emoji } : s));
+      try {
+        await api.calendar.update(editingId, {
+          title: form.title,
+          subject: form.subject,
+          topic: form.topic,
+          startDate: startDate.toISOString(),
+          duration: Number(form.duration),
+          priority: form.priority,
+          notes: form.notes || undefined,
+          color: form.color || undefined,
+          emoji: form.emoji || undefined,
+        });
+        await refreshEntries();
+      } catch (e) {
+        console.warn("/api/calendar/entry PUT failed; keeping local edit", e);
+      }
     } else {
       // Create on server calendar, then refresh entries to reflect backend
       try {
@@ -336,7 +354,16 @@ export default function StudyPlanPage() {
     setIsAddModalOpen(false);
   };
 
-  const deleteSession = (id: string) => setSessions(prev => prev.filter(s => s.id !== id));
+  const deleteSession = async (id: string) => {
+    // Optimistic remove
+    setSessions(prev => prev.filter(s => s.id !== id));
+    try {
+      await api.calendar.delete(id);
+      await refreshEntries();
+    } catch (e) {
+      console.warn("/api/calendar/entry DELETE failed; local state may be out of sync", e);
+    }
+  };
   const markComplete = (id: string) => setSessions(prev => prev.map(s => s.id === id ? { ...s, status: 'completed' } : s));
   const openDetails = (id: string) => { setEditingId(id); setIsDetailsOpen(true); };
 
@@ -501,7 +528,8 @@ export default function StudyPlanPage() {
               key={session.id}
               className={cn(
                 "text-[11px] p-1 rounded text-white font-medium truncate cursor-pointer border shadow-sm",
-                !session.color && subjectColor(session.subject)
+                !session.color && subjectColor(session.subject),
+                session.startDate < now && "cb-past"
               )}
               style={session.color ? { backgroundColor: session.color } : undefined}
               onClick={(e) => { e.stopPropagation(); openDetails(session.id); }}
@@ -963,7 +991,8 @@ export default function StudyPlanPage() {
                                     key={session.id}
                                     className={cn(
                                       "absolute left-0 right-0 mx-1 p-1 rounded text-xs text-white font-medium cursor-pointer shadow-sm border pointer-events-auto",
-                                      !session.color && subjectColor(session.subject)
+                                      !session.color && subjectColor(session.subject),
+                                      session.startDate < now && "cb-past"
                                     )}
                                     style={{
                                       top: `calc(${totalMinutesFromBase} * (4rem / 60))`,

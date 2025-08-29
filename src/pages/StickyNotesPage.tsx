@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { loadBoard, saveBoard, StickyNote } from "@/lib/stickyStorage";
+import { api } from "@/lib/api";
 import { Trash2, Pin, PinOff, RefreshCw } from "lucide-react";
 
 export default function StickyNotesPage() {
@@ -12,8 +13,26 @@ export default function StickyNotesPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   useEffect(() => {
-    const board = loadBoard();
-    setNotes(board.notes);
+    const init = async () => {
+      try {
+        const list = await api.bookmarks.list();
+        const mapped: StickyNote[] = list.map((b) => ({
+          id: b.id,
+          title: b.title,
+          content: b.content,
+          color: "yellow",
+          tags: b.tags ?? [],
+          pinned: false,
+          createdAt: b.createdAt ?? new Date().toISOString(),
+          updatedAt: b.updatedAt ?? new Date().toISOString(),
+        }));
+        setNotes(mapped);
+      } catch {
+        const board = loadBoard();
+        setNotes(board.notes);
+      }
+    };
+    init();
   }, []);
 
   useEffect(() => {
@@ -36,9 +55,24 @@ export default function StickyNotesPage() {
   const remove = (id: string) => {
     setNotes(prev => prev.filter(n => n.id !== id));
   };
-  const refreshFromStorage = () => {
-    const board = loadBoard();
-    setNotes(board.notes);
+  const refreshFromStorage = async () => {
+    try {
+      const list = await api.bookmarks.list();
+      const mapped: StickyNote[] = list.map((b) => ({
+        id: b.id,
+        title: b.title,
+        content: b.content,
+        color: "yellow",
+        tags: b.tags ?? [],
+        pinned: false,
+        createdAt: b.createdAt ?? new Date().toISOString(),
+        updatedAt: b.updatedAt ?? new Date().toISOString(),
+      }));
+      setNotes(mapped);
+    } catch {
+      const board = loadBoard();
+      setNotes(board.notes);
+    }
   };
 
   // Drag to reorder handlers

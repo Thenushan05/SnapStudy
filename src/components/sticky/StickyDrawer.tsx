@@ -14,6 +14,7 @@ import {
   deleteSticky,
   duplicateSticky,
 } from "@/lib/stickyStorage";
+import { api } from "@/lib/api";
 import { Plus, X, Pin, PinOff, Copy, Trash2, Palette, RefreshCw } from "lucide-react";
 
 export interface StickyDrawerProps {
@@ -46,10 +47,27 @@ export function StickyDrawer({ open, onClose }: StickyDrawerProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) {
-      const board = loadBoard();
-      setNotes(board.notes);
-    }
+    const load = async () => {
+      if (!open) return;
+      try {
+        const list = await api.bookmarks.list();
+        const mapped: StickyNote[] = list.map((b) => ({
+          id: b.id,
+          title: b.title,
+          content: b.content,
+          color: "yellow",
+          tags: b.tags ?? [],
+          pinned: false,
+          createdAt: b.createdAt ?? new Date().toISOString(),
+          updatedAt: b.updatedAt ?? new Date().toISOString(),
+        }));
+        setNotes(mapped);
+      } catch {
+        const board = loadBoard();
+        setNotes(board.notes);
+      }
+    };
+    load();
   }, [open]);
 
   useEffect(() => {
@@ -79,9 +97,24 @@ export function StickyDrawer({ open, onClose }: StickyDrawerProps) {
     setNotes((prev) => [n, ...prev]);
   };
 
-  const refresh = () => {
-    const board = loadBoard();
-    setNotes(board.notes);
+  const refresh = async () => {
+    try {
+      const list = await api.bookmarks.list();
+      const mapped: StickyNote[] = list.map((b) => ({
+        id: b.id,
+        title: b.title,
+        content: b.content,
+        color: "yellow",
+        tags: b.tags ?? [],
+        pinned: false,
+        createdAt: b.createdAt ?? new Date().toISOString(),
+        updatedAt: b.updatedAt ?? new Date().toISOString(),
+      }));
+      setNotes(mapped);
+    } catch {
+      const board = loadBoard();
+      setNotes(board.notes);
+    }
   };
 
   const handleUpdate = (id: string, patch: Partial<StickyNote>) => {

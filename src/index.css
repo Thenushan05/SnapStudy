@@ -124,6 +124,21 @@
     );
     background-size: auto;
   }
+
+  /* Color-blind-friendly past-state: visual treatment only (keeps interactions) */
+  .cb-past {
+    position: relative;
+    opacity: 0.7;
+    filter: grayscale(0.25);
+    background-image: repeating-linear-gradient(
+      45deg,
+      hsl(var(--border) / 0.3) 0,
+      hsl(var(--border) / 0.3) 10px,
+      transparent 10px,
+      transparent 20px
+    );
+    background-size: auto;
+  }
 }
 
 @layer base {

@@ -1,4 +1,4 @@
-import { Search, Sun, Moon, User, StickyNote } from "lucide-react";
+import { Search, Sun, Moon, User, StickyNote, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +6,8 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
- 
+import { useContext } from "react";
+import { AuthContext } from "@/providers/AuthProvider";
 
 interface AppHeaderProps {
   onOpenSticky?: () => void;
@@ -14,6 +15,7 @@ interface AppHeaderProps {
 
 export function AppHeader({ onOpenSticky }: AppHeaderProps) {
   const { theme, setTheme } = useTheme();
+  const auth = useContext(AuthContext);
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
@@ -94,12 +96,23 @@ export function AppHeader({ onOpenSticky }: AppHeaderProps) {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem>
-                <Link to="/login" className="w-full">Login</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link to="/settings" className="w-full">Settings</Link>
-              </DropdownMenuItem>
+              {auth?.user ? (
+                <>
+                  <DropdownMenuItem>
+                    <Link to="/settings" className="w-full">Settings</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={(e) => { e.preventDefault(); auth.logout(); }} className="cursor-pointer">
+                    <div className="flex items-center gap-2 w-full">
+                      <LogOut className="w-4 h-4" />
+                      <span>Logout</span>
+                    </div>
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <DropdownMenuItem>
+                  <Link to="/login" className="w-full">Login</Link>
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
