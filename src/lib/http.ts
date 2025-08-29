@@ -1,6 +1,6 @@
 export const BASE_URL =
   (import.meta as unknown as { env?: Record<string, string | undefined> })?.env
-    ?.VITE_API_BASE_URL ?? "https://backendsnap-student.vercel.app/";
+    ?.VITE_API_BASE_URL ?? "https://backendsnap-student.vercel.app";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
