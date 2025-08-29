@@ -16,7 +16,12 @@ type QuizRunnerConfig = {
 
 type QuizRunResults = {
   answers: Record<number, string | number>;
-  questions: Array<unknown>;
+  questions: Array<{
+    type: string;
+    question: string;
+    options?: string[];
+    correct: string | number;
+  }>;
   score: number;
   timeSpent: number;
   config: QuizRunnerConfig;
@@ -58,6 +63,7 @@ export default function QuizPage() {
       }
       const data = await quizApi.byImage(imageId);
       setQuiz(data);
+      try { window.dispatchEvent(new Event("sessions:refresh")); } catch (_) { /* no-op */ }
       setMode("running");
     } catch (e) {
       // Show error but still proceed with mock questions in the runner

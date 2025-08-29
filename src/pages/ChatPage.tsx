@@ -1,12 +1,19 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useContext } from "react";
 import { ChatThread, type Message } from "@/components/chat/ChatThread";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { UploadDropzone } from "@/components/upload/UploadDropzone";
 import { api } from "@/lib/api";
 import { HttpError } from "@/lib/http";
 import { toast } from "sonner";
+import { AuthContext } from "@/providers/AuthProvider";
 
 export default function ChatPage() {
+  const auth = useContext(AuthContext);
+  const currentUserId = (() => {
+    const u = auth?.user as unknown as Record<string, unknown> | null | undefined;
+    const idVal = u && (u["id"] ?? u?.["_id"] ?? u?.["userId"] ?? u?.["email"]);
+    return idVal != null ? String(idVal) : "anonymous";
+  })();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const expiryTimerRef = useRef<number | null>(null);
@@ -14,9 +21,11 @@ export default function ChatPage() {
   const restoredCountRef = useRef(0);
   const historySyncedRef = useRef(0);
   const warnedSessionRef = useRef(false);
+  const prevUserIdRef = useRef<string | null>(null);
 
   const CHAT_STORAGE_KEY = "chat_messages";
   const CHAT_TTL_MS = 60 * 60 * 1000; // 60 minutes
+  const CHAT_USER_KEY = "chat_user_id";
 
   // Helper to persist sessionId with debug logs
   const setSessionId = useCallback((sid: string) => {
@@ -32,12 +41,24 @@ export default function ChatPage() {
   function clearChatStorage() {
     try {
       sessionStorage.removeItem(CHAT_STORAGE_KEY);
+      sessionStorage.removeItem("lastSessionId");
+      sessionStorage.removeItem("lastImageId");
+      sessionStorage.removeItem("selectedImageId");
     } catch (_) {
       /* no-op */
     }
   }
 
-  function saveChat(messagesToSave: Message[]) {
+  // Clear ALL session storage items (use when user changes)
+  function clearAllSessionStorage() {
+    try {
+      sessionStorage.clear();
+    } catch (_) {
+      /* no-op */
+    }
+  }
+
+  const saveChat = useCallback((messagesToSave: Message[]) => {
     const payload = {
       messages: messagesToSave.map((m) => ({
         ...m,
@@ -46,13 +67,15 @@ export default function ChatPage() {
           : undefined,
       })),
       savedAt: Date.now(),
+      userId: currentUserId,
     };
     try {
       sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(payload));
+      sessionStorage.setItem(CHAT_USER_KEY, currentUserId);
     } catch (_) {
       /* no-op */
     }
-  }
+  }, [CHAT_STORAGE_KEY, CHAT_USER_KEY, currentUserId]);
 
   function loadChat(): Message[] | null {
     try {
@@ -61,8 +84,15 @@ export default function ChatPage() {
       const parsed = JSON.parse(raw) as {
         messages: Message[];
         savedAt: number;
+        userId?: string;
       };
       if (!parsed?.savedAt || !Array.isArray(parsed?.messages)) return null;
+      // If stored chat belongs to a different user, clear it
+      const storedUser = parsed.userId || sessionStorage.getItem(CHAT_USER_KEY) || "anonymous";
+      if (storedUser !== currentUserId) {
+        clearAllSessionStorage();
+        return null;
+      }
       const age = Date.now() - parsed.savedAt;
       if (age > CHAT_TTL_MS) {
         clearChatStorage();
@@ -106,8 +136,16 @@ export default function ChatPage() {
     [CHAT_TTL_MS]
   );
 
-  // Load chat on mount if not expired
+  // Load chat on mount or when user changes, if not expired
   useEffect(() => {
+    // If user changed since last render, clear chat to prevent cross-user leakage
+    if (prevUserIdRef.current && prevUserIdRef.current !== currentUserId) {
+      clearAllSessionStorage();
+      setMessages([]);
+      restoredCountRef.current = 0;
+      historySyncedRef.current = 0;
+    }
+    prevUserIdRef.current = currentUserId;
     const restored = loadChat();
     if (restored && restored.length) {
       setMessages(restored);
@@ -118,7 +156,7 @@ export default function ChatPage() {
       if (expiryTimerRef.current) window.clearTimeout(expiryTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scheduleExpiry]);
+  }, [scheduleExpiry, currentUserId]);
 
   // Persist chat and reset expiry whenever messages change
   useEffect(() => {
@@ -131,7 +169,7 @@ export default function ChatPage() {
     } catch {
       scheduleExpiry();
     }
-  }, [messages, scheduleExpiry]);
+  }, [messages, scheduleExpiry, saveChat]);
 
   // Post chat history on every new message appended (skip restored-on-mount)
   useEffect(() => {
@@ -177,7 +215,10 @@ export default function ChatPage() {
       toast("Re-trying processing…");
       const proc = await api.process.image({ imageId });
       const sessionId = proc.data?.sessionId;
-      if (sessionId) setSessionId(sessionId);
+      if (sessionId) {
+        setSessionId(sessionId);
+        try { window.dispatchEvent(new Event("sessions:refresh")); } catch (e) { /* no-op */ }
+      }
       const evidenceCount = Number(proc.data?.evidenceCount ?? 0);
       if (evidenceCount === 0) {
         setMessages((prev) => [
@@ -201,6 +242,7 @@ export default function ChatPage() {
           content: `Summary: ${summary}`,
           timestamp: new Date(),
           animate: true,
+          evidence: Array.isArray(proc.data?.evidence) ? proc.data!.evidence : [],
         },
       ]);
       toast.success("Image processed");
@@ -262,8 +304,9 @@ export default function ChatPage() {
         },
         {
           type: "assistant",
-          content: `Image uploaded. ID: ${imageId}`,
+          content: `Image uploaded and ready to process.`,
           timestamp: new Date(),
+          tag: "upload",
         },
       ]);
 
@@ -292,6 +335,7 @@ export default function ChatPage() {
             content: `Summary: ${summary}`,
             timestamp: new Date(),
             animate: true,
+            evidence: Array.isArray(proc.data?.evidence) ? proc.data!.evidence : [],
           },
         ]);
         toast.success("Image processed");
@@ -370,7 +414,13 @@ export default function ChatPage() {
             setIsLoading(true);
             const res = await api.chat.rag({ sessionId, imageId, text });
             const newSessionId = res.data?.sessionId;
-            if (newSessionId) setSessionId(newSessionId);
+            if (newSessionId) {
+              setSessionId(newSessionId);
+              try { window.dispatchEvent(new Event("sessions:refresh")); } catch (e) { /* no-op */ }
+            } else {
+              // Even without a new session id, a chat addition may update recents
+              try { window.dispatchEvent(new Event("sessions:refresh")); } catch (e) { /* no-op */ }
+            }
             const reply =
               res.data?.response?.content ||
               res.data?.reply ||

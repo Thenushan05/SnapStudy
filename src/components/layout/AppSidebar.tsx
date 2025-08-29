@@ -1,5 +1,7 @@
 import { MessageSquare, History, BrainCircuit, Map, BookOpen, Settings, Plus, CalendarDays, StickyNote } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import {
   Sidebar,
   SidebarContent,
@@ -61,6 +63,43 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
   const isCollapsed = state === "collapsed";
+  const [recentSessions, setRecentSessions] = useState<Array<{ id: string; title?: string }>>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
+  useEffect(() => {
+    let aborted = false;
+    let ac = new AbortController();
+
+    const load = async () => {
+      try {
+        setLoadingSessions(true);
+        const list = await api.sessions.list({ signal: ac.signal });
+        if (!aborted) setRecentSessions(list.slice(0, 5));
+      } catch (_) {
+        if (!aborted) setRecentSessions([]);
+      } finally {
+        if (!aborted) setLoadingSessions(false);
+      }
+    };
+
+    // initial load
+    load();
+
+    // listen for refresh events
+    const onRefresh = () => {
+      // cancel any in-flight
+      ac.abort();
+      ac = new AbortController();
+      load();
+    };
+    window.addEventListener("sessions:refresh", onRefresh as EventListener);
+
+    return () => {
+      aborted = true;
+      ac.abort();
+      window.removeEventListener("sessions:refresh", onRefresh as EventListener);
+    };
+  }, []);
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -122,11 +161,21 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-1">
-                {["Math Notes - Chapter 5", "Biology Diagrams", "History Quiz"].map((session, index) => (
-                  <SidebarMenuItem key={index}>
+                {loadingSessions && recentSessions.length === 0 && (
+                  <SidebarMenuItem>
+                    <div className="px-3 py-2 text-xs text-muted">Loading…</div>
+                  </SidebarMenuItem>
+                )}
+                {!loadingSessions && recentSessions.length === 0 && (
+                  <SidebarMenuItem>
+                    <div className="px-3 py-2 text-xs text-muted">No recent sessions</div>
+                  </SidebarMenuItem>
+                )}
+                {recentSessions.map((s) => (
+                  <SidebarMenuItem key={s.id}>
                     <SidebarMenuButton className="w-full justify-start gap-3 px-3 py-2 text-sm text-muted hover:text-text hover:bg-secondary rounded-lg">
                       <MessageSquare className="w-3 h-3 flex-shrink-0" />
-                      <span className="truncate">{session}</span>
+                      <span className="truncate">{s.title || "Session"}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}

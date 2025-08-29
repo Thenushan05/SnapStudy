@@ -212,7 +212,16 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
 
   const handleNext = () => {
     if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(prev => prev + 1);
+      const next = currentQuestion + 1;
+      // Clear any pre-existing selection/state for the next question
+      setAnswers(prev => {
+        const copy = { ...prev };
+        delete copy[next];
+        return copy;
+      });
+      setLocked(prev => ({ ...prev, [next]: false }));
+      setIsCorrectMap(prev => ({ ...prev, [next]: false }));
+      setCurrentQuestion(next);
     }
   };
 
@@ -234,6 +243,8 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
   const progress = ((currentQuestion + 1) / questions.length) * 100;
   const isLocked = !!locked[currentQuestion];
   const isCorrect = isCorrectMap[currentQuestion];
+  const totalSeconds = config.timer ? Math.max(0, Math.floor(config.timer * 60)) : null;
+  const timePercent = (timeLeft !== null && totalSeconds) ? Math.max(0, Math.min(100, (timeLeft / totalSeconds) * 100)) : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -254,11 +265,14 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
           
           <div className="flex items-center gap-4">
             {timeLeft !== null && (
-              <div className="flex items-center gap-2 text-sm">
+              <div
+                className={`px-3 py-1 rounded-md border font-mono flex items-center gap-2 text-base md:text-lg ${timeLeft <= 60 ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border-red-300 dark:border-red-700" : "bg-accent/10 text-accent border-accent/40"}`}
+                aria-live="polite"
+                aria-label={`Time remaining ${formatTime(timeLeft)}`}
+                title={totalSeconds ? `Time remaining: ${formatTime(timeLeft)} of ${formatTime(totalSeconds)}` : `Time remaining: ${formatTime(timeLeft)}`}
+              >
                 <Clock className="w-4 h-4" />
-                <span className={timeLeft < 300 ? "text-error" : "text-muted"}>
-                  {formatTime(timeLeft)}
-                </span>
+                <span>{formatTime(timeLeft)}</span>
               </div>
             )}
             {timeLeft !== null && warnedOneMinute && (
@@ -272,6 +286,11 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
             </Button>
           </div>
         </div>
+        {timePercent !== null && (
+          <div className="mt-3">
+            <Progress value={timePercent} className="h-2" />
+          </div>
+        )}
       </div>
 
       {/* Question */}
@@ -286,7 +305,13 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
             <CardContent>
               {(question.type === "mcq" || question.type === "flashcard") && (
                 <RadioGroup
-                  value={answers[currentQuestion]?.toString()}
+                  key={currentQuestion}
+                  name={`q-${currentQuestion}`}
+                  value={
+                    typeof answers[currentQuestion] === 'number'
+                      ? String(answers[currentQuestion])
+                      : ""
+                  }
                   onValueChange={(value) => handleAnswer(parseInt(value))}
                 >
                   {question.options?.map((option, index) => {
@@ -302,8 +327,15 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
                     }
                     return (
                       <div key={index} className={`flex items-center space-x-2 p-3 rounded-lg border transition-colors${bg}`}>
-                        <RadioGroupItem disabled={isLocked} value={index.toString()} id={`option-${index}`} />
-                        <Label htmlFor={`option-${index}`} className={`flex-1 ${isLocked ? "cursor-default" : "cursor-pointer"}`}>
+                        <RadioGroupItem
+                          disabled={isLocked}
+                          value={index.toString()}
+                          id={`q${currentQuestion}-option-${index}`}
+                        />
+                        <Label
+                          htmlFor={`q${currentQuestion}-option-${index}`}
+                          className={`flex-1 ${isLocked ? "cursor-default" : "cursor-pointer"}`}
+                        >
                           {option}
                         </Label>
                       </div>

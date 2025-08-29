@@ -114,9 +114,16 @@ export function QuizResults({ results, onRestart }: QuizResultsProps) {
           <div className="space-y-4">
             {questions.map((question, index: number) => {
               const userAnswer = answers[index];
-              const isCorrect = question.type === "mcq" 
-                ? userAnswer === question.correct
-                : true; // For short answers, we'd need more sophisticated checking
+              let isCorrect = false;
+              if (question.type === "mcq" || question.type === "flashcard") {
+                isCorrect = typeof question.correct === 'number' && userAnswer === question.correct;
+              } else if (question.type === "short" || question.type === "short-answer") {
+                if (typeof question.correct === 'string' && typeof userAnswer === 'string') {
+                  const a = userAnswer.trim().toLowerCase();
+                  const b = question.correct.trim().toLowerCase();
+                  isCorrect = a === b;
+                }
+              }
 
               return (
                 <div key={index} className="p-4 rounded-lg border border-border">
@@ -132,12 +139,23 @@ export function QuizResults({ results, onRestart }: QuizResultsProps) {
                     </Badge>
                   </div>
                   
-                  {question.type === "mcq" && (
+                  {(question.type === "mcq" || question.type === "flashcard") && (
                     <div className="text-sm text-muted">
-                      <div>Your answer: {question.options?.[userAnswer] || "Not answered"}</div>
+                      <div>Your answer: {typeof userAnswer === 'number' ? (question.options?.[userAnswer] ?? "Not answered") : "Not answered"}</div>
                       {!isCorrect && (
                         <div className="text-success dark:text-green-400">
-                          Correct answer: {question.options?.[question.correct]}
+                          Correct answer: {typeof question.correct === 'number' ? question.options?.[question.correct] : ''}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(question.type === "short" || question.type === "short-answer") && (
+                    <div className="text-sm text-muted">
+                      <div>Your answer: {typeof userAnswer === 'string' ? userAnswer : 'Not answered'}</div>
+                      {!isCorrect && typeof question.correct === 'string' && (
+                        <div className="text-success dark:text-green-400">
+                          Expected: {question.correct}
                         </div>
                       )}
                     </div>
