@@ -69,9 +69,11 @@ export async function request<TResponse = unknown, TBody = unknown>(
   };
   try {
     // Only set Authorization if not explicitly provided
-    const hasAuthHeader = Object.keys(builtHeaders).some((k) => k.toLowerCase() === "authorization");
+    const hasAuthHeader = Object.keys(builtHeaders).some(
+      (k) => k.toLowerCase() === "authorization"
+    );
     if (!hasAuthHeader) {
-      const token = localStorage.getItem('auth_token');
+      const token = localStorage.getItem("auth_token");
       if (token) builtHeaders["Authorization"] = `Bearer ${token}`;
     }
   } catch (_) {

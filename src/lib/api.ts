@@ -90,12 +90,64 @@ function parseMindMapResponse(data: unknown): MindMapNode[] {
     return nodesOut;
   }
 
+  // New: support shape { mindmap: { nodes: [{ id,label, subNodes: [...] }, ...] } }
+  if (inner && Array.isArray((inner as Record<string, unknown>).nodes)) {
+    const nodesArr = (inner as Record<string, unknown>)
+      .nodes as Array<Record<string, unknown>>;
+    const out: MindMapNode[] = [];
+    for (const main of nodesArr) {
+      const mainId = String(main.id ?? cryptoRandomId());
+      const mainLabel = String(main.label ?? main.title ?? "");
+      const subs = Array.isArray(main.subNodes)
+        ? (main.subNodes as unknown[])
+        : [];
+      const childIds: string[] = [];
+      for (const s of subs) {
+        if (!isObject(s)) continue;
+        const sid = String((s as Record<string, unknown>).id ?? cryptoRandomId());
+        childIds.push(sid);
+        out.push({
+          id: sid,
+          label: String(
+            (s as Record<string, unknown>).label ??
+              (s as Record<string, unknown>).title ??
+              ""
+          ),
+          x: 240,
+          y: childIds.length * 100,
+          level: 1,
+          children: [],
+          parent: mainId,
+        });
+      }
+      out.push({
+        id: mainId,
+        label: mainLabel,
+        x: 0,
+        y: out.filter((n) => n.level === 0).length * 120,
+        level: 0,
+        children: childIds,
+        parent: undefined,
+      });
+    }
+    // Ensure parents come before children for some renderers
+    out.sort((a, b) => a.level - b.level);
+    return out;
+  }
+
   // normalize container
   const rawNodes: unknown[] = Array.isArray(data)
     ? data
     : Array.isArray(container?.nodes)
     ? (container!.nodes as unknown[])
-    : [];
+    : ((): unknown[] => {
+        // Also check unwrapped inner for nodes array
+        const maybeInnerNodes = inner &&
+          (inner as Record<string, unknown>).nodes;
+        return Array.isArray(maybeInnerNodes)
+          ? (maybeInnerNodes as unknown[])
+          : [];
+      })();
 
   const rawEdges: Array<Record<string, unknown>> = Array.isArray(
     container?.edges
@@ -553,23 +605,42 @@ export const api = {
     }> {
       // Backend route is POST /api/upload with field name 'image'
       const path = opts?.path ?? "/api/upload";
-      const res = await http.post<{
-        success: boolean;
+      const raw = await http.post<unknown>(path, form, {
+        signal: opts?.signal,
+        timeoutMs: 20000,
+      });
+      // Normalize response to always have 'image'
+      const r = (raw && typeof raw === "object"
+        ? (raw as Record<string, unknown>)
+        : undefined) as
+        | (Record<string, unknown> & {
+            success?: boolean;
+            image?: Record<string, unknown>;
+            file?: Record<string, unknown>;
+          })
+        | undefined;
+      const img = (r?.image || r?.file) as Record<string, unknown> | undefined;
+      if (!r || !img)
+        throw new Error("Invalid upload response: missing image data");
+      return {
+        success: Boolean(r.success ?? true),
         image: {
-          id: string;
-          cloudinaryId: string;
-          url: string;
-          width?: number;
-          height?: number;
-          format?: string;
-          size?: number;
-          uploadedAt?: string | Date;
-          userId?: string;
-          sessionId?: string | null;
-          tags?: string[];
-        };
-      }>(path, form, { signal: opts?.signal, timeoutMs: 20000 });
-      return res;
+          id: String(img.id ?? ""),
+          cloudinaryId: String(img.cloudinaryId ?? ""),
+          url: String(img.url ?? ""),
+          width: typeof img.width === "number" ? img.width : undefined,
+          height: typeof img.height === "number" ? img.height : undefined,
+          format: typeof img.format === "string" ? img.format : undefined,
+          size: typeof img.size === "number" ? img.size : undefined,
+          uploadedAt: (img.uploadedAt as string | Date | undefined) ?? undefined,
+          userId: typeof img.userId === "string" ? img.userId : undefined,
+          sessionId:
+            img.sessionId != null ? String(img.sessionId) : undefined,
+          tags: Array.isArray(img.tags)
+            ? (img.tags as unknown[]).map(String)
+            : undefined,
+        },
+      };
     },
     async imageFile(
       file: File | Blob,
@@ -597,8 +668,9 @@ export const api = {
       };
     }> {
       const fd = new FormData();
+      // Backend expects field name 'file' (works in Postman). Use that.
       fd.append(
-        "image",
+        "file",
         file,
         (opts?.filename ?? "upload") +
           (file instanceof File && file.name.includes(".") ? "" : ".png")
