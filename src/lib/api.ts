@@ -871,34 +871,95 @@ function parseQuizResponse(data: unknown): Quiz | null {
     quizId: String(o.quizId ?? ""),
     title: String(o.title ?? "Quiz"),
     difficulty: o.difficulty ? String(o.difficulty) : undefined,
-    totalQuestions: Number(o.totalQuestions ?? questions.length),
+    totalQuestions: Number(
+      (o.totalQuestions as unknown) ?? (o.questionCount as unknown) ?? questions.length
+    ),
     createdAt: o.createdAt ? String(o.createdAt) : undefined,
     updatedAt: o.updatedAt ? String(o.updatedAt) : undefined,
     questions: questions.map((q) => {
-      const typeStr = (
-        q.type === "short" ? "short-answer" : String(q.type || "mcq")
-      ) as QuizQuestionType;
-      const options = Array.isArray(q.options)
+      // Normalize type names from backend to our supported set
+      const rawType = String(q.type ?? "mcq").toLowerCase();
+      const isTrueFalse = [
+        "true-false",
+        "truefalse",
+        "boolean",
+        "tf",
+      ].includes(rawType);
+      const normalizedType: QuizQuestionType = [
+        "multiple-choice",
+        "mcq",
+      ].includes(rawType)
+        ? "mcq"
+        : rawType === "short" || rawType === "short-answer"
+        ? "short-answer"
+        : isTrueFalse
+        ? "mcq" // render true/false as a 2-option MCQ
+        : rawType === "flashcard"
+        ? "flashcard"
+        : "mcq"; // default fallback
+
+      // Options normalization
+      let options: string[] | undefined = Array.isArray(q.options)
         ? (q.options as unknown[]).map(String)
         : undefined;
-      let correct: number | string = 0;
-      if (
-        typeof q.correctAnswer === "number" ||
-        typeof q.correctAnswer === "string"
-      ) {
-        if (
-          (typeStr === "mcq" || typeStr === "flashcard") &&
-          typeof q.correctAnswer === "string"
-        ) {
-          const n = parseInt(q.correctAnswer as string, 10);
-          correct = Number.isFinite(n) ? n : 0;
-        } else {
-          correct = q.correctAnswer as number | string;
-        }
+      if (isTrueFalse) {
+        // Ensure True/False options exist for TF questions
+        options = ["True", "False"];
       }
+
+      // correctAnswer may come as number (index), string value, string index, or boolean (for TF)
+      const rawCorrect =
+        (q as Record<string, unknown>).correctAnswer ??
+        (q as Record<string, unknown>).answer;
+      let correct: number | string = 0;
+      if (normalizedType === "mcq" || normalizedType === "flashcard") {
+        if (typeof rawCorrect === "number") {
+          correct = rawCorrect;
+        } else if (typeof rawCorrect === "boolean") {
+          // map boolean to True/False index
+          correct = rawCorrect ? 0 : 1;
+        } else if (typeof rawCorrect === "string") {
+          const lc = rawCorrect.trim().toLowerCase();
+          if (isTrueFalse) {
+            correct = lc === "true" ? 0 : lc === "false" ? 1 : 0;
+          } else {
+            // Letter answers like A/B/C/D -> 0/1/2/3
+            if (/^[a-z]$/.test(lc)) {
+              const idx = lc.charCodeAt(0) - 97; // 'a' -> 0
+              correct = idx >= 0 ? idx : 0;
+            } else {
+              // try parse as numeric index first
+              const n = parseInt(rawCorrect, 10);
+              if (Number.isFinite(n)) {
+                correct = n;
+              } else if (options && options.length) {
+                // Normalize options by stripping leading labels like "A)", "A.", "1)", "1." before comparison
+                const norm = (s: string) =>
+                  s
+                    .trim()
+                    .replace(/^[a-zA-Z]\s*[).]\s*/, "")
+                    .replace(/^\d+\s*[).]\s*/, "")
+                    .trim()
+                    .toLowerCase();
+                const target = lc;
+                const idx = options.findIndex((opt) => norm(opt) === target);
+                correct = idx >= 0 ? idx : 0;
+              } else {
+                correct = 0;
+              }
+            }
+          }
+        }
+      } else {
+        // short-answer: prefer string; fallback to stringified value
+        if (typeof rawCorrect === "string") correct = rawCorrect;
+        else if (rawCorrect != null) correct = String(rawCorrect);
+        else correct = "";
+      }
+
       return {
         id: String(q.id ?? cryptoRandomId()),
-        type: typeStr,
+        type: normalizedType,
         question: String(q.question ?? ""),
         options,
         correctAnswer: correct,
