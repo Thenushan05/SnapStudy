@@ -1,10 +1,11 @@
+import { useState, useMemo } from "react";
 import { Clock, MessageSquare, User } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { useNavigate } from "react-router-dom";
 
 function timeAgo(iso?: string) {
   if (!iso) return "";
@@ -20,12 +21,13 @@ function timeAgo(iso?: string) {
 }
 
 export default function HistoryPage() {
-  const navigate = useNavigate();
+  const [openId, setOpenId] = useState<string | null>(null);
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["chat-history-sessions"],
     queryFn: () => api.chat.historySessions(),
     staleTime: 30_000,
   });
+  const selected = useMemo(() => (openId && data ? data.find(s => s.id === openId) : null), [openId, data]);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -73,23 +75,15 @@ export default function HistoryPage() {
                         </div>
                       </div>
                     </div>
+                    <div className="ml-4 shrink-0">
+                      <Button size="sm" variant="outline" onClick={() => setOpenId(session.id)}>View Chat</Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <CardDescription className="text-foreground whitespace-pre-wrap line-clamp-3 mb-3">
+                  <CardDescription className="text-foreground whitespace-pre-wrap line-clamp-3">
                     {last?.content || ""}
                   </CardDescription>
-                  <div className="flex justify-end">
-                    <Button
-                      variant="default"
-                      onClick={() => {
-                        try { sessionStorage.setItem("lastSessionId", String(session.id)); } catch (_) { /* no-op */ }
-                        navigate("/chat");
-                      }}
-                    >
-                      View Chat
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
             );
@@ -99,6 +93,41 @@ export default function HistoryPage() {
           )}
         </div>
       )}
+
+      {/* View Chat Dialog */}
+      <Dialog open={!!openId} onOpenChange={(v) => !v && setOpenId(null)}>
+        <DialogContent className="sm:max-w-2xl w-screen sm:w-auto max-h-[85dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selected?.title || "Chat Session"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selected?.messages && selected.messages.length > 0 ? (
+              <div className="space-y-3">
+                {selected.messages.map((m, idx) => {
+                  const role = (m.role || "assistant").toLowerCase();
+                  const Icon = role === "user" ? User : MessageSquare;
+                  return (
+                    <div key={idx} className="flex items-start gap-3 p-3 rounded-md border bg-background">
+                      <div className="w-8 h-8 rounded bg-accent/10 flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4 text-accent" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 text-xs text-muted mb-1">
+                          <span className="capitalize">{role}</span>
+                          {m.timestamp && <span>• {timeAgo(m.timestamp)}</span>}
+                        </div>
+                        <div className="whitespace-pre-wrap text-sm">{m.content || ""}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-muted">No messages in this session.</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

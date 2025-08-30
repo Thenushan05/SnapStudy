@@ -32,7 +32,7 @@ interface MindMapToolbarProps {
 
 export function MindMapToolbar({ selectedNodeId, onAction }: MindMapToolbarProps) {
   return (
-    <div className="border-b border-border bg-surface p-3 sticky top-0 z-30 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
+    <div className="border-b border-border bg-surface p-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold text-text">Mind Map</h2>

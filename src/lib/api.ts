@@ -653,10 +653,10 @@ export const api = {
       if (!id) throw new Error("calendar entry id is required");
       // Backend route to mark complete
       const base = opts?.path ?? `/api/calendar/${encodeURIComponent(id)}/complete`;
-      // Use PATCH per backend contract
+      // Use POST by default; backend may also accept PUT/PATCH
       const body: Record<string, unknown> = {};
       if (typeof payload?.actualDuration === 'number') body.actualDuration = payload.actualDuration;
-      return http.patch(base, body, { signal: opts?.signal, timeoutMs: 15000 });
+      return http.post(base, body, { signal: opts?.signal, timeoutMs: 15000 });
     },
   },
   quiz: {
