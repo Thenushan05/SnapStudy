@@ -1,16 +1,16 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { 
-  ZoomIn, 
-  ZoomOut, 
-  RotateCcw, 
-  Download, 
-  Plus, 
-  Brain, 
+import {
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Download,
+  Plus,
+  Brain,
   FileQuestion,
   Maximize,
   Trash,
-  Save
+  Save,
 } from "lucide-react";
 
 type MindMapAction =
@@ -30,16 +30,17 @@ interface MindMapToolbarProps {
   onAction: (action: MindMapAction, data?: string) => void;
 }
 
-export function MindMapToolbar({ selectedNodeId, onAction }: MindMapToolbarProps) {
+export function MindMapToolbar({
+  selectedNodeId,
+  onAction,
+}: MindMapToolbarProps) {
   return (
-    <div className="border-b border-border bg-surface p-3 sticky top-0 z-30 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
+    <div className="border-b border-border bg-surface p-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold text-text">Mind Map</h2>
           {selectedNodeId && (
-            <span className="text-sm text-muted">
-              Node selected
-            </span>
+            <span className="text-sm text-muted">Node selected</span>
           )}
         </div>
 
@@ -93,7 +94,7 @@ export function MindMapToolbar({ selectedNodeId, onAction }: MindMapToolbarProps
               <Plus className="w-4 h-4" />
               Add Node
             </Button>
-            
+
             {selectedNodeId && (
               <>
                 <Button
@@ -114,7 +115,7 @@ export function MindMapToolbar({ selectedNodeId, onAction }: MindMapToolbarProps
                   <Brain className="w-4 h-4" />
                   Expand with AI
                 </Button>
-                
+
                 <Button
                   variant="ghost"
                   size="sm"
@@ -124,7 +125,7 @@ export function MindMapToolbar({ selectedNodeId, onAction }: MindMapToolbarProps
                   <FileQuestion className="w-4 h-4" />
                   Create Quiz
                 </Button>
-                
+
                 {/* Removed Add to Notes */}
               </>
             )}
