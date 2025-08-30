@@ -327,7 +327,7 @@ export const api = {
       }>
     > {
       const path = opts?.path ?? "/api/chat/history";
-      const data = await http.get<unknown>(path, { signal: opts?.signal, timeoutMs: 20000 });
+      const data = await http.get<unknown>(path, { signal: opts?.signal, timeoutMs: 40000 });
       const root = (data && typeof data === 'object' ? data as Record<string, unknown> : undefined);
       const sessions: unknown[] = Array.isArray(root)
         ? (root as unknown[])
@@ -366,7 +366,7 @@ export const api = {
     ): Promise<MindMapNode[]> {
       if (!imageId) throw new Error("imageId is required");
       const path = `/api/mindmap/${encodeURIComponent(imageId)}`;
-      const data = await http.get<unknown>(path, { signal, timeoutMs: 20000 });
+      const data = await http.get<unknown>(path, { signal, timeoutMs: 40000 });
       return parseMindMapResponse(data);
     },
     async save(
@@ -668,7 +668,7 @@ export const api = {
       const path = opts?.path ?? `/api/quiz/${encodeURIComponent(imageId)}`;
       const data = await http.get<unknown>(path, {
         signal: opts?.signal,
-        timeoutMs: 20000,
+        timeoutMs: 40000,
       });
       const parsed = parseQuizResponse(data);
       if (!parsed) throw new Error("Invalid quiz response");
@@ -701,7 +701,7 @@ export const api = {
       const path = opts?.path ?? "/api/upload";
       const raw = await http.post<unknown>(path, form, {
         signal: opts?.signal,
-        timeoutMs: 20000,
+        timeoutMs: 40000,
       });
       // Normalize response to always have 'image'
       const r = (
