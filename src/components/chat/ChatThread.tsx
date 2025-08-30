@@ -76,6 +76,53 @@ export function ChatThread({ messages, isLoading, onRetryProcess }: ChatThreadPr
     };
     lines.forEach((line, i) => {
       const trimmed = line.trim();
+      // Promote '**Title**:' and '1. **Title**:' style labels to attractive headings
+      const numberedBoldLabel = trimmed.match(/^\d+\.\s+\*\*(.+?)\*\*:\s*(.*)$/);
+      if (numberedBoldLabel) {
+        const title = numberedBoldLabel[1];
+        const rest = numberedBoldLabel[2] || "";
+        flushList();
+        elements.push(
+          <h3
+            className="font-semibold text-base mt-3 text-sky-600 dark:text-sky-400"
+            key={`nbh-${i}`}
+            dangerouslySetInnerHTML={{ __html: title }}
+          />
+        );
+        if (rest) {
+          elements.push(
+            <p
+              className="leading-relaxed"
+              key={`nbp-${i}`}
+              dangerouslySetInnerHTML={{ __html: inline(rest) }}
+            />
+          );
+        }
+        return;
+      }
+      const boldLabel = trimmed.match(/^\*\*(.+?)\*\*:\s*(.*)$/);
+      if (boldLabel) {
+        const title = boldLabel[1];
+        const rest = boldLabel[2] || "";
+        flushList();
+        elements.push(
+          <h3
+            className="font-semibold text-base mt-3 text-sky-600 dark:text-sky-400"
+            key={`bh-${i}`}
+            dangerouslySetInnerHTML={{ __html: title }}
+          />
+        );
+        if (rest) {
+          elements.push(
+            <p
+              className="leading-relaxed"
+              key={`bp-${i}`}
+              dangerouslySetInnerHTML={{ __html: inline(rest) }}
+            />
+          );
+        }
+        return;
+      }
       if (/^[-*]\s+/.test(trimmed)) {
         listBuffer.push(trimmed.replace(/^[-*]\s+/, ""));
         return;

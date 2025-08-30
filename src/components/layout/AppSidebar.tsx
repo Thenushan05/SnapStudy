@@ -14,6 +14,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
 
 const navigation = [
   { 
@@ -65,6 +66,7 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed";
   const [recentSessions, setRecentSessions] = useState<Array<{ id: string; title?: string }>>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     let aborted = false;
@@ -80,10 +82,15 @@ export function AppSidebar() {
             title?: string;
             updatedAt?: string | number | Date;
             createdAt?: string | number | Date;
+            userId?: string | number;
           };
           const toTime = (v?: string | number | Date): number =>
             v ? new Date(v).getTime() : 0;
-          const arr: HistItem[] = Array.isArray(list) ? (list as HistItem[]) : [];
+          let arr: HistItem[] = Array.isArray(list) ? (list as HistItem[]) : [];
+          // Filter by current user when available
+          if (user?.id) {
+            arr = arr.filter((s) => String(s.userId ?? "") === String(user.id));
+          }
           const withTime = arr.map((s) => ({
             id: String(s.id ?? s.sessionId ?? ""),
             title: s.title || "Session",
@@ -112,7 +119,7 @@ export function AppSidebar() {
       aborted = true;
       window.removeEventListener("sessions:refresh", onRefresh as EventListener);
     };
-  }, []);
+  }, [user?.id]);
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";

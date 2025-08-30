@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useSearchParams } from "react-router-dom";
+import { useAuth } from "@/hooks/use-auth";
 
 function timeAgo(iso?: string) {
   if (!iso) return "";
@@ -24,9 +25,19 @@ function timeAgo(iso?: string) {
 export default function HistoryPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [params] = useSearchParams();
+  const { user } = useAuth();
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["chat-history-sessions"],
-    queryFn: () => api.chat.historySessions(),
+    queryKey: ["chat-history-sessions", user?.id ?? null],
+    queryFn: async () => {
+      // Try server-side filter via query param if backend supports it
+      const path = user?.id ? `/api/chat/history?userId=${encodeURIComponent(String(user.id))}` : undefined;
+      const sessions = await api.chat.historySessions({ path });
+      // Fallback client-side filter to be safe
+      if (user?.id) {
+        return sessions.filter((s) => String((s as unknown as { userId?: string | number }).userId ?? "") === String(user.id));
+      }
+      return sessions;
+    },
     staleTime: 30_000,
   });
   const selected = useMemo(() => (openId && data ? data.find(s => s.id === openId) : null), [openId, data]);
