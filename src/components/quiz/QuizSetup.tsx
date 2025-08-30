@@ -22,7 +22,7 @@ interface QuizSetupProps {
 }
 
 export function QuizSetup({ onStart }: QuizSetupProps) {
-  const [source, setSource] = useState("upload");
+  const [source, setSource] = useState("last");
   const [timerEnabled, setTimerEnabled] = useState(false);
   const [timerDuration, setTimerDuration] = useState([30]);
   const [file, setFile] = useState<File | null>(null);
@@ -130,7 +130,7 @@ export function QuizSetup({ onStart }: QuizSetupProps) {
           <CardContent>
             <RadioGroup value={source} onValueChange={(v) => { setSource(v); setErr(null); }}>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="upload" id="upload" />
+                <RadioGroupItem value="upload" id="upload" disabled />
                 <Label htmlFor="upload">Upload new content</Label>
               </div>
               <div className="flex items-center space-x-2">
