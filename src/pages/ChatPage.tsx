@@ -27,6 +27,7 @@ export default function ChatPage() {
   const CHAT_TTL_MS = 60 * 60 * 1000; // 60 minutes
   const CHAT_USER_KEY = "chat_user_id";
 
+
   // Helper to persist sessionId with debug logs
   const setSessionId = useCallback((sid: string) => {
     if (!sid) return;
@@ -359,118 +360,121 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {messages.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center p-4 sm:p-8 pb-[120px] sm:pb-28">
-          <div className="max-w-2xl w-full">
-            <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold text-text mb-4 text-balance">
-                Turn your notes into knowledge
-              </h1>
-              <p className="text-lg text-muted text-balance">
-                Drop a photo of your notes to start learning with AI-powered
-                summaries, quizzes, and mind maps.
-              </p>
+      {/* Main area */}
+      <div className="flex-1 flex flex-col">
+        {messages.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center p-4 sm:p-8 pb-[120px] sm:pb-28">
+            <div className="max-w-2xl w-full">
+              <div className="text-center mb-8">
+                <h1 className="text-4xl font-bold text-text mb-4 text-balance">
+                  Turn your notes into knowledge
+                </h1>
+                <p className="text-lg text-muted text-balance">
+                  Drop a photo of your notes to start learning with AI-powered
+                  summaries, quizzes, and mind maps.
+                </p>
+              </div>
+              <UploadDropzone onUpload={handleFilesUpload} />
             </div>
-            <UploadDropzone onUpload={handleFilesUpload} />
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto px-3 sm:px-4 pb-[120px] sm:pb-28">
-          <ChatThread
-            messages={messages}
-            isLoading={isLoading}
-            onRetryProcess={retryProcess}
-          />
-        </div>
-      )}
+        ) : (
+          <div className="flex-1 overflow-y-auto px-3 sm:px-4 pb-[120px] sm:pb-28">
+            <ChatThread
+              messages={messages}
+              isLoading={isLoading}
+              onRetryProcess={retryProcess}
+            />
+          </div>
+        )}
 
-      <ChatComposer
-        onSend={async (message) => {
-          const text = message.trim();
-          if (!text) return;
-          const sessionId = sessionStorage.getItem("lastSessionId") || "";
-          const selected = sessionStorage.getItem("selectedImageId") || "";
-          const imageId = selected || sessionStorage.getItem("lastImageId") || "";
-          setMessages((prev) => [
-            ...prev,
-            { type: "user", content: text, timestamp: new Date() },
-          ]);
-          // history posting handled by centralized useEffect
-
-          if (!sessionId || !imageId) {
-            toast.error("Please upload an image first to start a chat.");
+        <ChatComposer
+          onSend={async (message) => {
+            const text = message.trim();
+            if (!text) return;
+            const sessionId = sessionStorage.getItem("lastSessionId") || "";
+            const selected = sessionStorage.getItem("selectedImageId") || "";
+            const imageId = selected || sessionStorage.getItem("lastImageId") || "";
             setMessages((prev) => [
               ...prev,
-              {
-                type: "assistant",
-                content:
-                  "Please upload an image first so I can analyze it and chat about it.",
-                timestamp: new Date(),
-              },
-            ]);
-            return;
-          }
-          try {
-            setIsLoading(true);
-            const res = await api.chat.rag({ sessionId, imageId, text });
-            const newSessionId = res.data?.sessionId;
-            if (newSessionId) {
-              setSessionId(newSessionId);
-              try { window.dispatchEvent(new Event("sessions:refresh")); } catch (e) { /* no-op */ }
-            } else {
-              // Even without a new session id, a chat addition may update recents
-              try { window.dispatchEvent(new Event("sessions:refresh")); } catch (e) { /* no-op */ }
-            }
-            const reply =
-              res.data?.response?.content ||
-              res.data?.reply ||
-              res.message ||
-              "";
-            setMessages((prev) => [
-              ...prev,
-              {
-                type: "assistant",
-                content: reply || "(no reply)",
-                timestamp: new Date(),
-                animate: true,
-              },
+              { type: "user", content: text, timestamp: new Date() },
             ]);
             // history posting handled by centralized useEffect
 
-            // After chat response, fetch updated mind map using last image id
-            try {
-              const imgId = sessionStorage.getItem("lastImageId") || imageId;
-              if (imgId) {
-                const nodes = await api.mindmap.byImage(imgId);
-                // Save to session for any mindmap view to pick up
-                // sessionStorage.setItem(
-                //   "mindmap_nodes",
-                //   JSON.stringify({ nodes, savedAt: Date.now() })
-                // );
-              }
-            } catch (e) {
-              // Non-blocking: ignore failures silently or log
-              console.warn("mindmap fetch failed", e);
+            if (!sessionId || !imageId) {
+              toast.error("Please upload an image first to start a chat.");
+              setMessages((prev) => [
+                ...prev,
+                {
+                  type: "assistant",
+                  content:
+                    "Please upload an image first so I can analyze it and chat about it.",
+                  timestamp: new Date(),
+                },
+              ]);
+              return;
             }
-          } catch (err) {
-            console.error("chat.rag failed", err);
-            toast.error("Chat failed");
-            setMessages((prev) => [
-              ...prev,
-              {
-                type: "assistant",
-                content: "I couldn't process that chat request.",
-                timestamp: new Date(),
-                animate: true,
-              },
-            ]);
-          } finally {
-            setIsLoading(false);
-          }
-        }}
-        onUpload={handleFilesUpload}
-        disabled={isLoading}
-      />
+            try {
+              setIsLoading(true);
+              const res = await api.chat.rag({ sessionId, imageId, text });
+              const newSessionId = res.data?.sessionId;
+              if (newSessionId) {
+                setSessionId(newSessionId);
+                try { window.dispatchEvent(new Event("sessions:refresh")); } catch (e) { /* no-op */ }
+              } else {
+                // Even without a new session id, a chat addition may update recents
+                try { window.dispatchEvent(new Event("sessions:refresh")); } catch (e) { /* no-op */ }
+              }
+              const reply =
+                res.data?.response?.content ||
+                res.data?.reply ||
+                res.message ||
+                "";
+              setMessages((prev) => [
+                ...prev,
+                {
+                  type: "assistant",
+                  content: reply || "(no reply)",
+                  timestamp: new Date(),
+                  animate: true,
+                },
+              ]);
+              // history posting handled by centralized useEffect
+
+              // After chat response, fetch updated mind map using last image id
+              try {
+                const imgId = sessionStorage.getItem("lastImageId") || imageId;
+                if (imgId) {
+                  const nodes = await api.mindmap.byImage(imgId);
+                  // Save to session for any mindmap view to pick up
+                  // sessionStorage.setItem(
+                  //   "mindmap_nodes",
+                  //   JSON.stringify({ nodes, savedAt: Date.now() })
+                  // );
+                }
+              } catch (e) {
+                // Non-blocking: ignore failures silently or log
+                console.warn("mindmap fetch failed", e);
+              }
+            } catch (err) {
+              console.error("chat.rag failed", err);
+              toast.error("Chat failed");
+              setMessages((prev) => [
+                ...prev,
+                {
+                  type: "assistant",
+                  content: "I couldn't process that chat request.",
+                  timestamp: new Date(),
+                  animate: true,
+                },
+              ]);
+            } finally {
+              setIsLoading(false);
+            }
+          }}
+          onUpload={handleFilesUpload}
+          disabled={isLoading}
+        />
+      </div>
     </div>
   );
 }

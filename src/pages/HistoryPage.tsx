@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Clock, MessageSquare, User } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { useSearchParams } from "react-router-dom";
 
 function timeAgo(iso?: string) {
   if (!iso) return "";
@@ -22,12 +23,21 @@ function timeAgo(iso?: string) {
 
 export default function HistoryPage() {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [params] = useSearchParams();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["chat-history-sessions"],
     queryFn: () => api.chat.historySessions(),
     staleTime: 30_000,
   });
   const selected = useMemo(() => (openId && data ? data.find(s => s.id === openId) : null), [openId, data]);
+
+  // Auto-open a session if sessionId is provided in query string
+  useEffect(() => {
+    const sid = params.get("sessionId");
+    if (!sid || !data || !data.length) return;
+    const exists = data.find((s) => s.id === sid);
+    if (exists) setOpenId(sid);
+  }, [params, data]);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -103,7 +113,16 @@ export default function HistoryPage() {
           <div className="space-y-4">
             {selected?.messages && selected.messages.length > 0 ? (
               <div className="space-y-3">
-                {selected.messages.map((m, idx) => {
+                {[...selected.messages]
+                  .sort((a, b) => {
+                    const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                    const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                    if (ta !== tb) return ta - tb; // chronological
+                    const wa = (a.role || "assistant").toLowerCase() === "user" ? 0 : 1;
+                    const wb = (b.role || "assistant").toLowerCase() === "user" ? 0 : 1;
+                    return wa - wb; // user before assistant when same time
+                  })
+                  .map((m, idx) => {
                   const role = (m.role || "assistant").toLowerCase();
                   const Icon = role === "user" ? User : MessageSquare;
                   return (

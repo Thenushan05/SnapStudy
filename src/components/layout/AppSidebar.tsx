@@ -68,13 +68,30 @@ export function AppSidebar() {
 
   useEffect(() => {
     let aborted = false;
-    let ac = new AbortController();
 
     const load = async () => {
       try {
         setLoadingSessions(true);
-        const list = await api.sessions.list({ signal: ac.signal });
-        if (!aborted) setRecentSessions(list.slice(0, 5));
+        const list = await api.chat.historySessions();
+        if (!aborted) {
+          type HistItem = {
+            id?: string | number;
+            sessionId?: string | number;
+            title?: string;
+            updatedAt?: string | number | Date;
+            createdAt?: string | number | Date;
+          };
+          const toTime = (v?: string | number | Date): number =>
+            v ? new Date(v).getTime() : 0;
+          const arr: HistItem[] = Array.isArray(list) ? (list as HistItem[]) : [];
+          const withTime = arr.map((s) => ({
+            id: String(s.id ?? s.sessionId ?? ""),
+            title: s.title || "Session",
+            __t: s.updatedAt ? toTime(s.updatedAt) : toTime(s.createdAt),
+          }));
+          withTime.sort((a, b) => b.__t - a.__t);
+          setRecentSessions(withTime.slice(0, 5).map(({ id, title }) => ({ id, title })));
+        }
       } catch (_) {
         if (!aborted) setRecentSessions([]);
       } finally {
@@ -87,16 +104,12 @@ export function AppSidebar() {
 
     // listen for refresh events
     const onRefresh = () => {
-      // cancel any in-flight
-      ac.abort();
-      ac = new AbortController();
       load();
     };
     window.addEventListener("sessions:refresh", onRefresh as EventListener);
 
     return () => {
       aborted = true;
-      ac.abort();
       window.removeEventListener("sessions:refresh", onRefresh as EventListener);
     };
   }, []);
@@ -173,9 +186,11 @@ export function AppSidebar() {
                 )}
                 {recentSessions.map((s) => (
                   <SidebarMenuItem key={s.id}>
-                    <SidebarMenuButton className="w-full justify-start gap-3 px-3 py-2 text-sm text-muted hover:text-text hover:bg-secondary rounded-lg">
-                      <MessageSquare className="w-3 h-3 flex-shrink-0" />
-                      <span className="truncate">{s.title || "Session"}</span>
+                    <SidebarMenuButton asChild className="w-full justify-start gap-3 px-3 py-2 text-sm text-muted hover:text-text hover:bg-secondary rounded-lg">
+                      <NavLink to={`/history?sessionId=${encodeURIComponent(s.id)}`}>
+                        <MessageSquare className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{s.title || "Session"}</span>
+                      </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
