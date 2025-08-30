@@ -1,112 +1,104 @@
-import { History, FileImage, Brain, FileText, HelpCircle, Clock } from "lucide-react";
+import { Clock, MessageSquare, User } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { useNavigate } from "react-router-dom";
 
-const historyItems = [
-  {
-    id: 1,
-    title: "Math Notes - Chapter 5",
-    type: "summary",
-    icon: FileText,
-    timestamp: "2 hours ago",
-    preview: "Quadratic equations and their applications in real-world problems...",
-    tags: ["Mathematics", "Algebra"]
-  },
-  {
-    id: 2,
-    title: "Biology Diagrams",
-    type: "quiz",
-    icon: HelpCircle,
-    timestamp: "1 day ago",
-    preview: "Created 15 questions about cellular respiration and photosynthesis...",
-    tags: ["Biology", "Cell Biology"]
-  },
-  {
-    id: 3,
-    title: "History Timeline",
-    type: "mindmap",
-    icon: Brain,
-    timestamp: "3 days ago",
-    preview: "World War II events and their interconnections...",
-    tags: ["History", "World War II"]
-  },
-  {
-    id: 4,
-    title: "Chemistry Formulas",
-    type: "notes",
-    icon: FileImage,
-    timestamp: "1 week ago",
-    preview: "Organic chemistry reaction mechanisms and synthesis pathways...",
-    tags: ["Chemistry", "Organic"]
-  }
-];
-
-const typeColors = {
-  summary: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300",
-  quiz: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-  mindmap: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300",
-  notes: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300"
-};
+function timeAgo(iso?: string) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hr${hrs > 1 ? "s" : ""} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days > 1 ? "s" : ""} ago`;
+}
 
 export default function HistoryPage() {
+  const navigate = useNavigate();
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["chat-history-sessions"],
+    queryFn: () => api.chat.historySessions(),
+    staleTime: 30_000,
+  });
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-text mb-2">Study History</h1>
-        <p className="text-muted">Review and revisit your learning sessions</p>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-text mb-2">Chat History</h1>
+          <p className="text-muted">Review your past conversations</p>
+        </div>
+        <Button variant="outline" onClick={() => refetch()} disabled={isLoading}>Refresh</Button>
       </div>
 
-      <div className="grid gap-4">
-        {historyItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Card key={item.id} className="surface-interactive cursor-pointer">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                      <Icon className="w-5 h-5 text-accent" />
-                    </div>
-                    <div className="flex-1">
-                      <CardTitle className="text-lg font-semibold text-text">
-                        {item.title}
-                      </CardTitle>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge 
-                          variant="secondary" 
-                          className={typeColors[item.type as keyof typeof typeColors]}
-                        >
-                          {item.type}
-                        </Badge>
-                        <div className="flex items-center gap-1 text-sm text-muted">
+      {isLoading && (
+        <div className="text-muted">Loading chat history…</div>
+      )}
+      {isError && (
+        <div className="text-red-600 dark:text-red-400">Failed to load history.</div>
+      )}
+
+      {!isLoading && !isError && (
+        <div className="grid gap-4">
+          {(data && data.length ? data : []).map((session) => {
+            const last = (session.messages && session.messages.length)
+              ? session.messages[session.messages.length - 1]
+              : undefined;
+            const isUser = (last?.role || "assistant").toLowerCase() === "user";
+            const Icon = isUser ? User : MessageSquare;
+            const title = session.title || "New Chat";
+            const subtitle = `${session.messageCount ?? session.messages.length} message${(session.messageCount ?? session.messages.length) === 1 ? "" : "s"}`;
+            return (
+              <Card key={session.id} className="surface-interactive">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                        <Icon className="w-5 h-5 text-accent" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-lg font-semibold text-text flex items-center gap-2">
+                          {title}
+                          <Badge variant="secondary" className="ml-1">{subtitle}</Badge>
+                        </CardTitle>
+                        <div className="flex items-center gap-2 mt-1 text-sm text-muted">
                           <Clock className="w-3 h-3" />
-                          {item.timestamp}
+                          {timeAgo(session.updatedAt || session.createdAt)}
                         </div>
                       </div>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm">
-                    Reopen
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <CardDescription className="text-muted mb-3">
-                  {item.preview}
-                </CardDescription>
-                <div className="flex gap-2">
-                  {item.tags.map((tag) => (
-                    <Badge key={tag} variant="outline" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <CardDescription className="text-foreground whitespace-pre-wrap line-clamp-3 mb-3">
+                    {last?.content || ""}
+                  </CardDescription>
+                  <div className="flex justify-end">
+                    <Button
+                      variant="default"
+                      onClick={() => {
+                        try { sessionStorage.setItem("lastSessionId", String(session.id)); } catch (_) { /* no-op */ }
+                        navigate("/chat");
+                      }}
+                    >
+                      View Chat
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+          {data && data.length === 0 && (
+            <div className="text-muted">No chat sessions yet.</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

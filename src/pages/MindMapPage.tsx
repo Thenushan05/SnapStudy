@@ -30,6 +30,34 @@ export default function MindMapPage() {
   const [currentImageId, setCurrentImageId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  // Explain with AI popup state
+  const [explainOpen, setExplainOpen] = useState(false);
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [explainError, setExplainError] = useState<string | null>(null);
+  const [explainText, setExplainText] = useState<string>("");
+  const [explainNodeId, setExplainNodeId] = useState<string | null>(null);
+
+  // Highlight the selected node id inside the explanation
+  const highlightedExplain = useMemo(() => {
+    if (!explainText) return null;
+    if (!explainNodeId) return explainText;
+    const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(escapeRegExp(explainNodeId), "gi");
+    const parts = explainText.split(re);
+    const matches = explainText.match(re) || [];
+    const nodes: (string | JSX.Element)[] = [];
+    parts.forEach((part, i) => {
+      nodes.push(part);
+      if (i < matches.length) {
+        nodes.push(
+          <mark key={`hl-${i}`} className="bg-indigo-200 text-indigo-900 px-1 rounded">
+            {matches[i]}
+          </mark>
+        );
+      }
+    });
+    return nodes;
+  }, [explainText, explainNodeId]);
 
   // Auto-fit after data loads the first time
   const didAutoFitRef = useRef(false);
@@ -179,9 +207,29 @@ export default function MindMapPage() {
               })();
               break;
             case "expand-with-ai":
-              if (data) {
-                console.log("Mind map action:", action, data);
-              }
+              (async () => {
+                const nodeId = data || selectedNodeId;
+                if (!nodeId) return;
+                if (!currentImageId) {
+                  setExplainError("No image in context to explain");
+                  setExplainText("");
+                  setExplainOpen(true);
+                  return;
+                }
+                try {
+                  setExplainLoading(true);
+                  setExplainError(null);
+                  setExplainText("");
+                  setExplainNodeId(nodeId);
+                  setExplainOpen(true);
+                  const res = await api.mindmap.explain(currentImageId, nodeId);
+                  setExplainText(res.text || "");
+                } catch (e) {
+                  setExplainError(e instanceof Error ? e.message : "Failed to get explanation");
+                } finally {
+                  setExplainLoading(false);
+                }
+              })();
               break;
             case "create-quiz":
               if (data) {
@@ -193,8 +241,47 @@ export default function MindMapPage() {
           }
         }}
       />
+      {/* Global Explain with AI button */
       
-      <div className="flex-1 relative" style={{ minHeight: 'calc(100vh - 112px)' }}>
+      }
+      <div className="px-4 pt-2 flex justify-end">
+        <Button
+          variant="default"
+          onClick={async () => {
+            if (!currentImageId) {
+              setExplainError("No image in context to explain");
+              setExplainText("");
+              setExplainOpen(true);
+              return;
+            }
+            const targetId = selectedNodeId ?? currentImageId; // node id if selected, else mindmap/image id
+            try {
+              setExplainLoading(true);
+              setExplainError(null);
+              setExplainText("");
+              setExplainNodeId(targetId);
+              setExplainOpen(true);
+              const res = await api.mindmap.explain(currentImageId, targetId);
+              setExplainText(res.text || "");
+            } catch (e) {
+              setExplainError(e instanceof Error ? e.message : "Failed to get explanation");
+            } finally {
+              setExplainLoading(false);
+            }
+          }}
+        >
+          <span className="inline-flex items-center gap-2">
+            {/* Sparkle/Magic icon */}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+              <path d="M5 3a1 1 0 0 1 1 1v1h1a1 1 0 1 1 0 2H6v1a1 1 0 1 1-2 0V7H3a1 1 0 1 1 0-2h1V4a1 1 0 0 1 1-1Zm10 1a1 1 0 0 1 .894.553L16.764 6h1.736a1 1 0 0 1 .894 1.447l-.868 1.737.868 1.736A1 1 0 0 1 18.5 12h-1.736l-.87 1.447A1 1 0 0 1 14 13.894V12.5l-1.447-.868A1 1 0 0 1 12.5 10.5l1.447-.868V7.894A1 1 0 0 1 15 7l.868-1.447A1 1 0 0 1 15 4Z"/>
+              <path d="M10.586 17.414a2 2 0 0 1 0-2.828l4-4a2 2 0 1 1 2.828 2.828l-4 4a2 2 0 0 1-2.828 0Z"/>
+            </svg>
+            Explain with AI
+          </span>
+        </Button>
+      </div>
+      
+      <div className="flex-1 relative" style={{ minHeight: '70vh' }}>
         {loading ? (
           <div className="w-full h-full flex items-center justify-center text-muted text-sm">Loading mind map…</div>
         ) : error ? (
@@ -217,7 +304,7 @@ export default function MindMapPage() {
               setRenameOpen(true);
               setSelectedNodeId(id);
             }}
-            options={{ autoLayout: false, layout: 'layered', spacingX: 280, spacingY: 140, maxNodeWidth: 260, fullBleed: true, canvasMinWidth: 1200 }}
+            options={{ autoLayout: true, layout: 'layered', spacingX: 320, spacingY: 180, maxNodeWidth: 280, fullBleed: true, canvasMinWidth: 1200 }}
           />
         ))}
         {saveMessage && (
@@ -300,6 +387,36 @@ export default function MindMapPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Explain with AI Dialog */}
+      <Dialog open={explainOpen} onOpenChange={setExplainOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-indigo-600 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                <path d="M5 3a1 1 0 0 1 1 1v1h1a1 1 0 1 1 0 2H6v1a1 1 0 1 1-2 0V7H3a1 1 0 1 1 0-2h1V4a1 1 0 0 1 1-1Zm10 1a1 1 0 0 1 .894.553L16.764 6h1.736a1 1 0 0 1 .894 1.447l-.868 1.737.868 1.736A1 1 0 0 1 18.5 12h-1.736l-.87 1.447A1 1 0 0 1 14 13.894V12.5l-1.447-.868A1 1 0 0 1 12.5 10.5l1.447-.868V7.894A1 1 0 0 1 15 7l.868-1.447A1 1 0 0 1 15 4Z"/>
+                <path d="M10.586 17.414a2 2 0 0 1 0-2.828l4-4a2 2 0 1 1 2.828 2.828l-4 4a2 2 0 0 1-2.828 0Z"/>
+              </svg>
+              AI Explanation
+            </DialogTitle>
+            <DialogDescription>
+              Generated explanation for the selected topic.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 max-h-[60vh] overflow-auto whitespace-pre-wrap text-sm">
+            {explainLoading ? (
+              <span className="text-muted">Thinking…</span>
+            ) : explainError ? (
+              <span className="text-destructive">{explainError}</span>
+            ) : (
+              (highlightedExplain ?? explainText) || "No explanation available."
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setExplainOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

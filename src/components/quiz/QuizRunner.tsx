@@ -17,39 +17,7 @@ type UINormalizedQuestion = {
   explanation?: string;
 };
 
-// Mock quiz data
-const mockQuestions: UINormalizedQuestion[] = [
-  {
-    id: 1,
-    type: "mcq",
-    question: "What is the formula for the quadratic equation?",
-    options: [
-      "ax² + bx + c = 0",
-      "ax + b = 0", 
-      "ax³ + bx² + cx + d = 0",
-      "ax² + b = 0"
-    ],
-    correct: 0
-  },
-  {
-    id: 2,
-    type: "short",
-    question: "Explain the process of photosynthesis in plants.",
-    correct: "Photosynthesis is the process by which plants convert light energy into chemical energy..."
-  },
-  {
-    id: 3,
-    type: "mcq",
-    question: "Which organelle is responsible for cellular respiration?",
-    options: [
-      "Nucleus",
-      "Mitochondria",
-      "Chloroplast", 
-      "Ribosome"
-    ],
-    correct: 1
-  }
-];
+// Removed mockQuestions to avoid showing hardcoded data when API isn't ready
 
 type QuizRunnerConfig = {
   timer?: number; // minutes
@@ -80,17 +48,73 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
   const intervalRef = useRef<number | null>(null);
 
   const questions = useMemo<UINormalizedQuestion[]>(() => {
-    if (quiz && Array.isArray(quiz.questions) && quiz.questions.length) {
-      return quiz.questions.map((q) => ({
+    if (!(quiz && Array.isArray(quiz.questions) && quiz.questions.length)) return [];
+
+    const letterToIndex = (s: string): number | null => {
+      const m = /^\s*([A-Da-d])\s*\)/.exec(s);
+      if (!m) return null;
+      const ch = m[1].toUpperCase();
+      return ch.charCodeAt(0) - 'A'.charCodeAt(0);
+    };
+
+    return quiz.questions.map((q) => {
+      // Map external types to internal
+      const rawType = String(q.type || '').toLowerCase();
+      const type: UINormalizedQuestion["type"] =
+        rawType === 'short-answer' ? 'short-answer' :
+        rawType === 'multiple-choice' || rawType === 'true-false' || rawType === 'flashcard' ? 'mcq' :
+        'mcq';
+
+      // Build options
+      let options: string[] | undefined = Array.isArray(q.options) ? [...q.options] : undefined;
+      if (rawType === 'true-false') {
+        options = options && options.length >= 2 ? options : ['True', 'False'];
+      }
+
+      // Normalize correct answer to numeric index for MCQ/flashcard
+      let correct: number | string =
+        typeof q.correctAnswer === 'number' || typeof q.correctAnswer === 'string'
+          ? q.correctAnswer
+          : '';
+      if (type === 'mcq' && options && options.length) {
+        if (typeof q.correctAnswer === 'number') {
+          correct = Math.max(0, Math.min(options.length - 1, q.correctAnswer));
+        } else if (typeof q.correctAnswer === 'string') {
+          const ca = q.correctAnswer.trim();
+          // Pattern like "B) text"
+          const idxFromLetter = letterToIndex(ca);
+          if (idxFromLetter !== null && idxFromLetter < options.length) {
+            correct = idxFromLetter;
+          } else {
+            // Try exact match in options
+            let idx = options.findIndex(o => o.trim() === ca);
+            if (idx === -1) {
+              // Try match ignoring letter prefixes in options
+              const stripPrefix = (s: string) => s.replace(/^\s*[A-Da-d]\)\s*/, '');
+              const caStripped = stripPrefix(ca);
+              idx = options.findIndex(o => stripPrefix(o.trim()) === caStripped);
+            }
+            if (idx === -1 && rawType === 'true-false') {
+              // Handle True/False keywords
+              const lower = ca.toLowerCase();
+              idx = lower.startsWith('t') ? options.findIndex(o => o.toLowerCase().startsWith('t'))
+                  : lower.startsWith('f') ? options.findIndex(o => o.toLowerCase().startsWith('f'))
+                  : -1;
+            }
+            correct = idx >= 0 ? idx : 0; // fallback to first option
+          }
+        }
+      }
+
+      return {
         id: q.id,
-        type: (q.type === 'short-answer' ? 'short-answer' : q.type) as UINormalizedQuestion["type"],
+        type,
         question: q.question,
-        options: q.options,
-        correct: q.correctAnswer, // number | string
+        options,
+        correct,
         explanation: q.explanation,
-      }));
-    }
-    return mockQuestions;
+      } as UINormalizedQuestion;
+    });
   }, [quiz]);
 
   const handleSubmitQuiz = useCallback(() => {
@@ -247,6 +271,22 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
   const timePercent = (timeLeft !== null && totalSeconds) ? Math.max(0, Math.min(100, (timeLeft / totalSeconds) * 100)) : null;
 
   return (
+    // If no questions available, show an empty state and allow user to go back
+    questions.length === 0 ? (
+      <div className="flex flex-col h-full items-center justify-center p-8 text-center">
+        <Card className="surface-elevated max-w-xl w-full">
+          <CardHeader>
+            <CardTitle>No questions available</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted mb-4">
+              The quiz could not load any questions from the API. Please go back and try again after uploading content or selecting a valid session.
+            </p>
+            <Button onClick={onExit}>Back to Setup</Button>
+          </CardContent>
+        </Card>
+      </div>
+    ) : (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="border-b border-border bg-surface p-4">
@@ -409,5 +449,6 @@ export function QuizRunner({ config, quiz, onComplete, onExit }: QuizRunnerProps
         </div>
       </div>
     </div>
-  );
+  )
+);
 }

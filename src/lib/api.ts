@@ -92,8 +92,9 @@ function parseMindMapResponse(data: unknown): MindMapNode[] {
 
   // New: support shape { mindmap: { nodes: [{ id,label, subNodes: [...] }, ...] } }
   if (inner && Array.isArray((inner as Record<string, unknown>).nodes)) {
-    const nodesArr = (inner as Record<string, unknown>)
-      .nodes as Array<Record<string, unknown>>;
+    const nodesArr = (inner as Record<string, unknown>).nodes as Array<
+      Record<string, unknown>
+    >;
     const out: MindMapNode[] = [];
     for (const main of nodesArr) {
       const mainId = String(main.id ?? cryptoRandomId());
@@ -104,7 +105,9 @@ function parseMindMapResponse(data: unknown): MindMapNode[] {
       const childIds: string[] = [];
       for (const s of subs) {
         if (!isObject(s)) continue;
-        const sid = String((s as Record<string, unknown>).id ?? cryptoRandomId());
+        const sid = String(
+          (s as Record<string, unknown>).id ?? cryptoRandomId()
+        );
         childIds.push(sid);
         out.push({
           id: sid,
@@ -142,8 +145,8 @@ function parseMindMapResponse(data: unknown): MindMapNode[] {
     ? (container!.nodes as unknown[])
     : ((): unknown[] => {
         // Also check unwrapped inner for nodes array
-        const maybeInnerNodes = inner &&
-          (inner as Record<string, unknown>).nodes;
+        const maybeInnerNodes =
+          inner && (inner as Record<string, unknown>).nodes;
         return Array.isArray(maybeInnerNodes)
           ? (maybeInnerNodes as unknown[])
           : [];
@@ -277,7 +280,9 @@ export const api = {
         timeoutMs: 15000,
       });
       const container =
-        data && typeof data === "object" ? (data as Record<string, unknown>) : undefined;
+        data && typeof data === "object"
+          ? (data as Record<string, unknown>)
+          : undefined;
       const arr: unknown = Array.isArray(data)
         ? data
         : Array.isArray(container?.data)
@@ -289,19 +294,64 @@ export const api = {
         : [];
       const src = Array.isArray(arr) ? arr : [];
       return src.map((n) => {
-        const o = n && typeof n === "object" ? (n as Record<string, unknown>) : {};
+        const o =
+          n && typeof n === "object" ? (n as Record<string, unknown>) : {};
         const id = o.id ?? o._id ?? o.sessionId ?? cryptoRandomId();
-        const titleRaw = o.title ?? o.name ?? o.summary ?? o.lastMessage ?? "Session";
+        const titleRaw =
+          o.title ?? o.name ?? o.summary ?? o.lastMessage ?? "Session";
         return {
           id: String(id),
-          title: typeof titleRaw === "string" ? titleRaw : String(titleRaw ?? "Session"),
+          title:
+            typeof titleRaw === "string"
+              ? titleRaw
+              : String(titleRaw ?? "Session"),
           name: typeof o.name === "string" ? o.name : undefined,
           sessionId: o.sessionId != null ? String(o.sessionId) : undefined,
           imageId: o.imageId != null ? String(o.imageId) : undefined,
-          lastMessage: typeof o.lastMessage === "string" ? o.lastMessage : undefined,
+          lastMessage:
+            typeof o.lastMessage === "string" ? o.lastMessage : undefined,
           createdAt: o.createdAt != null ? String(o.createdAt) : undefined,
           updatedAt: o.updatedAt != null ? String(o.updatedAt) : undefined,
         };
+      });
+    },
+    async historySessions(opts?: { signal?: AbortSignal; path?: string }): Promise<
+      Array<{
+        id: string;
+        title?: string;
+        createdAt?: string;
+        updatedAt?: string;
+        messageCount?: number;
+        messages: Array<{ role?: string; content?: string; timestamp?: string }>;
+        [k: string]: unknown;
+      }>
+    > {
+      const path = opts?.path ?? "/api/chat/history";
+      const data = await http.get<unknown>(path, { signal: opts?.signal, timeoutMs: 20000 });
+      const root = (data && typeof data === 'object' ? data as Record<string, unknown> : undefined);
+      const sessions: unknown[] = Array.isArray(root)
+        ? (root as unknown[])
+        : Array.isArray(root?.data)
+        ? (root!.data as unknown[])
+        : [];
+      return sessions.map((s) => {
+        const o = s && typeof s === 'object' ? (s as Record<string, unknown>) : {};
+        const id = String(o.id ?? o._id ?? cryptoRandomId());
+        const title = typeof o.title === 'string' ? o.title : undefined;
+        const createdAt = o.createdAt != null ? String(o.createdAt) : undefined;
+        const updatedAt = o.updatedAt != null ? String(o.updatedAt) : undefined;
+        const messageCount = typeof o.messageCount === 'number' ? o.messageCount : undefined;
+        const rawMsgs = (o as { messages?: unknown }).messages;
+        const msgsRaw: unknown[] = Array.isArray(rawMsgs) ? rawMsgs : [];
+        const messages = msgsRaw.map((m) => {
+          const mm = m && typeof m === 'object' ? (m as Record<string, unknown>) : {};
+          return {
+            role: typeof mm.role === 'string' ? mm.role : undefined,
+            content: typeof mm.content === 'string' ? mm.content : undefined,
+            timestamp: mm.timestamp != null ? String(mm.timestamp) : undefined,
+          };
+        });
+        return { id, title, createdAt, updatedAt, messageCount, messages, ...o };
       });
     },
   },
@@ -348,6 +398,36 @@ export const api = {
         }
       }
     },
+    async explain(
+      imageId: string,
+      mindmapId: string,
+      opts?: { signal?: AbortSignal; path?: string }
+    ): Promise<{ text: string }> {
+      if (!imageId) throw new Error("imageId is required");
+      if (!mindmapId) throw new Error("mindmapId is required");
+      const path =
+        opts?.path ?? `/api/mindmap/${encodeURIComponent(imageId)}/node/${encodeURIComponent(mindmapId)}/explain`;
+      const data = await http.post<unknown>(
+        path,
+        { imageId, mindmapId },
+        { signal: opts?.signal, timeoutMs: 30000 }
+      );
+      // Normalize response: accept string or common envelopes
+      if (typeof data === "string") return { text: data };
+      const o = data && typeof data === "object" ? (data as Record<string, unknown>) : undefined;
+      const text =
+        (typeof o?.text === "string" && o.text) ||
+        (typeof o?.explanation === "string" && o.explanation) ||
+        (typeof o?.content === "string" && o.content) ||
+        (o?.data && typeof o.data === "object" && typeof (o.data as Record<string, unknown>).text === "string"
+          ? String((o.data as Record<string, unknown>).text)
+          : undefined) ||
+        (o?.explanation && typeof o.explanation === "object" && typeof (o.explanation as Record<string, unknown>).explanation === "string"
+          ? String((o.explanation as Record<string, unknown>).explanation)
+          : undefined);
+      if (!text) throw new Error("Invalid explain response");
+      return { text };
+    },
   },
   bookmarks: {
     async list(opts?: { signal?: AbortSignal; path?: string }): Promise<
@@ -387,10 +467,10 @@ export const api = {
         ? data
         : Array.isArray(container?.data)
         ? (container!.data as unknown[])
-        : getArrayProp(container, "bookmarks")
-        ?? getArrayProp(container, "results")
-        ?? getArrayProp(container, "items")
-        ?? [];
+        : getArrayProp(container, "bookmarks") ??
+          getArrayProp(container, "results") ??
+          getArrayProp(container, "items") ??
+          [];
       const src = Array.isArray(arrayData) ? arrayData : [];
       return src.map((n: unknown) => {
         const o =
@@ -501,7 +581,8 @@ export const api = {
       signal?: AbortSignal;
       path?: string;
     }): Promise<unknown> {
-      const path = opts?.path ?? "/api/calendar/entries";
+      const path =
+        opts?.path ?? "/api/calendar?page=1&limit=10&sortBy=startDate&sortOrder=asc";
       return http.get<unknown>(path, {
         signal: opts?.signal,
         timeoutMs: 15000,
@@ -526,7 +607,7 @@ export const api = {
       id?: string; // some backends may return id at root
       message?: string;
     }> {
-      const path = opts?.path ?? "/api/calendar/create";
+      const path = opts?.path ?? "/api/calendar";
       return http.post(path, payload, {
         signal: opts?.signal,
         timeoutMs: 15000,
@@ -563,6 +644,19 @@ export const api = {
       const path =
         opts?.path ?? `/api/calendar/entry/${encodeURIComponent(id)}`;
       return http.delete(path, { signal: opts?.signal, timeoutMs: 15000 });
+    },
+    async complete(
+      id: string,
+      payload?: { actualDuration?: number },
+      opts?: { signal?: AbortSignal; path?: string }
+    ): Promise<unknown> {
+      if (!id) throw new Error("calendar entry id is required");
+      // Backend route to mark complete
+      const base = opts?.path ?? `/api/calendar/${encodeURIComponent(id)}/complete`;
+      // Use PATCH per backend contract
+      const body: Record<string, unknown> = {};
+      if (typeof payload?.actualDuration === 'number') body.actualDuration = payload.actualDuration;
+      return http.patch(base, body, { signal: opts?.signal, timeoutMs: 15000 });
     },
   },
   quiz: {
@@ -610,9 +704,11 @@ export const api = {
         timeoutMs: 20000,
       });
       // Normalize response to always have 'image'
-      const r = (raw && typeof raw === "object"
-        ? (raw as Record<string, unknown>)
-        : undefined) as
+      const r = (
+        raw && typeof raw === "object"
+          ? (raw as Record<string, unknown>)
+          : undefined
+      ) as
         | (Record<string, unknown> & {
             success?: boolean;
             image?: Record<string, unknown>;
@@ -632,10 +728,10 @@ export const api = {
           height: typeof img.height === "number" ? img.height : undefined,
           format: typeof img.format === "string" ? img.format : undefined,
           size: typeof img.size === "number" ? img.size : undefined,
-          uploadedAt: (img.uploadedAt as string | Date | undefined) ?? undefined,
+          uploadedAt:
+            (img.uploadedAt as string | Date | undefined) ?? undefined,
           userId: typeof img.userId === "string" ? img.userId : undefined,
-          sessionId:
-            img.sessionId != null ? String(img.sessionId) : undefined,
+          sessionId: img.sessionId != null ? String(img.sessionId) : undefined,
           tags: Array.isArray(img.tags)
             ? (img.tags as unknown[]).map(String)
             : undefined,
@@ -773,6 +869,88 @@ export const api = {
       } as const;
       return http.post(path, body, { signal: opts?.signal, timeoutMs: 20000 });
     },
+    async history(opts?: { signal?: AbortSignal; path?: string; sessionId?: string }): Promise<
+      Array<{
+        id: string;
+        sessionId?: string;
+        role?: string;
+        text?: string;
+        imageId?: string;
+        createdAt?: string;
+        updatedAt?: string;
+        [k: string]: unknown;
+      }>
+    > {
+      const basePath = opts?.path ?? "/api/chat/history";
+      const path = opts?.sessionId ? `${basePath}?sessionId=${encodeURIComponent(opts.sessionId)}` : basePath;
+      const data = await http.get<unknown>(path, { signal: opts?.signal, timeoutMs: 20000 });
+      const container = data && typeof data === 'object' ? (data as Record<string, unknown>) : undefined;
+      const arr: unknown = Array.isArray(data)
+        ? data
+        : Array.isArray(container?.data)
+        ? (container!.data as unknown[])
+        : Array.isArray(container?.items)
+        ? (container!.items as unknown[])
+        : Array.isArray(container?.messages)
+        ? (container!.messages as unknown[])
+        : [];
+      const src = Array.isArray(arr) ? arr : [];
+      return src.map((n) => {
+        const o = n && typeof n === 'object' ? (n as Record<string, unknown>) : {};
+        const id = o.id ?? o._id ?? cryptoRandomId();
+        return {
+          id: String(id),
+          sessionId: o.sessionId != null ? String(o.sessionId) : undefined,
+          role: typeof o.role === 'string' ? o.role : undefined,
+          text: typeof o.text === 'string' ? o.text :
+                typeof o.message === 'string' ? o.message :
+                typeof o.content === 'string' ? o.content : undefined,
+          imageId: typeof o.imageId === 'string' ? o.imageId : undefined,
+          createdAt: o.createdAt != null ? String(o.createdAt) : undefined,
+          updatedAt: o.updatedAt != null ? String(o.updatedAt) : undefined,
+          ...o,
+        };
+      });
+    },
+    async historySessions(opts?: { signal?: AbortSignal; path?: string }): Promise<
+      Array<{
+        id: string;
+        title?: string;
+        createdAt?: string;
+        updatedAt?: string;
+        messageCount?: number;
+        messages: Array<{ role?: string; content?: string; timestamp?: string }>;
+        [k: string]: unknown;
+      }>
+    > {
+      const path = opts?.path ?? "/api/chat/history";
+      const data = await http.get<unknown>(path, { signal: opts?.signal, timeoutMs: 20000 });
+      const root = (data && typeof data === 'object' ? data as Record<string, unknown> : undefined);
+      const sessions: unknown[] = Array.isArray(root)
+        ? (root as unknown[])
+        : Array.isArray(root?.data)
+        ? (root!.data as unknown[])
+        : [];
+      return sessions.map((s) => {
+        const o = s && typeof s === 'object' ? (s as Record<string, unknown>) : {};
+        const id = String(o.id ?? (o as Record<string, unknown>)._id ?? cryptoRandomId());
+        const title = typeof o.title === 'string' ? o.title : undefined;
+        const createdAt = o.createdAt != null ? String(o.createdAt) : undefined;
+        const updatedAt = o.updatedAt != null ? String(o.updatedAt) : undefined;
+        const messageCount = typeof (o as Record<string, unknown>).messageCount === 'number' ? (o as Record<string, unknown>).messageCount as number : undefined;
+        const rawMsgs = (o as { messages?: unknown }).messages;
+        const msgsRaw: unknown[] = Array.isArray(rawMsgs) ? rawMsgs : [];
+        const messages = msgsRaw.map((m) => {
+          const mm = m && typeof m === 'object' ? (m as Record<string, unknown>) : {};
+          return {
+            role: typeof mm.role === 'string' ? mm.role : undefined,
+            content: typeof mm.content === 'string' ? mm.content : undefined,
+            timestamp: mm.timestamp != null ? String(mm.timestamp) : undefined,
+          };
+        });
+        return { id, title, createdAt, updatedAt, messageCount, messages, ...o };
+      });
+    },
   },
   // Notes API for saving editor content
   notes: {
@@ -871,34 +1049,94 @@ function parseQuizResponse(data: unknown): Quiz | null {
     quizId: String(o.quizId ?? ""),
     title: String(o.title ?? "Quiz"),
     difficulty: o.difficulty ? String(o.difficulty) : undefined,
-    totalQuestions: Number(o.totalQuestions ?? questions.length),
+    totalQuestions: Number(
+      (o.totalQuestions as unknown) ??
+        (o.questionCount as unknown) ??
+        questions.length
+    ),
     createdAt: o.createdAt ? String(o.createdAt) : undefined,
     updatedAt: o.updatedAt ? String(o.updatedAt) : undefined,
     questions: questions.map((q) => {
-      const typeStr = (
-        q.type === "short" ? "short-answer" : String(q.type || "mcq")
-      ) as QuizQuestionType;
-      const options = Array.isArray(q.options)
+      // Normalize type names from backend to our supported set
+      const rawType = String(q.type ?? "mcq").toLowerCase();
+      const isTrueFalse = ["true-false", "truefalse", "boolean", "tf"].includes(
+        rawType
+      );
+      const normalizedType: QuizQuestionType = [
+        "multiple-choice",
+        "mcq",
+      ].includes(rawType)
+        ? "mcq"
+        : rawType === "short" || rawType === "short-answer"
+        ? "short-answer"
+        : isTrueFalse
+        ? "mcq" // render true/false as a 2-option MCQ
+        : rawType === "flashcard"
+        ? "flashcard"
+        : "mcq"; // default fallback
+
+      // Options normalization
+      let options: string[] | undefined = Array.isArray(q.options)
         ? (q.options as unknown[]).map(String)
         : undefined;
-      let correct: number | string = 0;
-      if (
-        typeof q.correctAnswer === "number" ||
-        typeof q.correctAnswer === "string"
-      ) {
-        if (
-          (typeStr === "mcq" || typeStr === "flashcard") &&
-          typeof q.correctAnswer === "string"
-        ) {
-          const n = parseInt(q.correctAnswer as string, 10);
-          correct = Number.isFinite(n) ? n : 0;
-        } else {
-          correct = q.correctAnswer as number | string;
-        }
+      if (isTrueFalse) {
+        // Ensure True/False options exist for TF questions
+        options = ["True", "False"];
       }
+
+      // correctAnswer may come as number (index), string value, string index, or boolean (for TF)
+      const rawCorrect =
+        (q as Record<string, unknown>).correctAnswer ??
+        (q as Record<string, unknown>).answer;
+      let correct: number | string = 0;
+      if (normalizedType === "mcq" || normalizedType === "flashcard") {
+        if (typeof rawCorrect === "number") {
+          correct = rawCorrect;
+        } else if (typeof rawCorrect === "boolean") {
+          // map boolean to True/False index
+          correct = rawCorrect ? 0 : 1;
+        } else if (typeof rawCorrect === "string") {
+          const lc = rawCorrect.trim().toLowerCase();
+          if (isTrueFalse) {
+            correct = lc === "true" ? 0 : lc === "false" ? 1 : 0;
+          } else {
+            // Letter answers like A/B/C/D -> 0/1/2/3
+            if (/^[a-z]$/.test(lc)) {
+              const idx = lc.charCodeAt(0) - 97; // 'a' -> 0
+              correct = idx >= 0 ? idx : 0;
+            } else {
+              // try parse as numeric index first
+              const n = parseInt(rawCorrect, 10);
+              if (Number.isFinite(n)) {
+                correct = n;
+              } else if (options && options.length) {
+                // Normalize options by stripping leading labels like "A)", "A.", "1)", "1." before comparison
+                const norm = (s: string) =>
+                  s
+                    .trim()
+                    .replace(/^[a-zA-Z]\s*[).]\s*/, "")
+                    .replace(/^\d+\s*[).]\s*/, "")
+                    .trim()
+                    .toLowerCase();
+                const target = lc;
+                const idx = options.findIndex((opt) => norm(opt) === target);
+                correct = idx >= 0 ? idx : 0;
+              } else {
+                correct = 0;
+              }
+            }
+          }
+        }
+      } else {
+        // short-answer: prefer string; fallback to stringified value
+        if (typeof rawCorrect === "string") correct = rawCorrect;
+        else if (rawCorrect != null) correct = String(rawCorrect);
+        else correct = "";
+      }
+
       return {
         id: String(q.id ?? cryptoRandomId()),
-        type: typeStr,
+        type: normalizedType,
         question: String(q.question ?? ""),
         options,
         correctAnswer: correct,
@@ -965,6 +1203,14 @@ export const quizApi = {
     const fbParsed = parseQuizResponse(fbData);
     if (!fbParsed) throw new Error("Invalid quiz response (fallback)");
     return fbParsed;
+  },
+  async byId(quizId: string, signal?: AbortSignal): Promise<Quiz> {
+    if (!quizId) throw new Error("quizId is required");
+    const path = `/api/quiz/${encodeURIComponent(quizId)}`;
+    const data = await http.get<unknown>(path, { signal, timeoutMs: 20000 });
+    const parsed = parseQuizResponse(data);
+    if (!parsed) throw new Error("Invalid quiz response");
+    return parsed;
   },
   async byImage(imageId: string, signal?: AbortSignal): Promise<Quiz> {
     if (!imageId) throw new Error("imageId is required");
