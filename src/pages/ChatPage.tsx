@@ -158,6 +158,36 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleExpiry, currentUserId]);
 
+  // When arriving from History with a stored sessionId, load that session's history
+  useEffect(() => {
+    const sid = sessionStorage.getItem("lastSessionId") || "";
+    if (!sid) return;
+    (async () => {
+      try {
+        const src = await api.chat.history({ sessionId: sid });
+        const mapped: Message[] = (Array.isArray(src) ? src : []).map((m) => {
+          const o = (m && typeof m === "object" ? (m as Record<string, unknown>) : {}) as Record<string, unknown>;
+          const role = typeof o.role === "string" ? o.role : "assistant";
+          const text = typeof o.text === "string" ? o.text : (typeof o.content === "string" ? (o.content as string) : "");
+          const createdAt = typeof o.createdAt === "string" ? o.createdAt : undefined;
+          const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt : undefined;
+          return {
+            type: (role === "user" ? "user" : "assistant") as Message["type"],
+            content: text,
+            timestamp: createdAt ? new Date(createdAt) : (updatedAt ? new Date(updatedAt) : undefined),
+            animate: false,
+          };
+        });
+        setMessages(mapped);
+        // Mark these as restored to avoid re-posting to history
+        restoredCountRef.current = mapped.length;
+        historySyncedRef.current = mapped.length;
+      } catch (e) {
+        console.warn("[chat] failed to load session history", e);
+      }
+    })();
+  }, []);
+
   // Persist chat and reset expiry whenever messages change
   useEffect(() => {
     saveChat(messages);

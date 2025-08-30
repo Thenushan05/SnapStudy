@@ -40,6 +40,14 @@ export default function QuizPage() {
     setLoading(true);
     setError(null);
     try {
+      // Prefer explicit quizId if present
+      const storedQuizId = sessionStorage.getItem("quizId");
+      if (storedQuizId && storedQuizId.trim()) {
+        const data = await quizApi.byId(storedQuizId.trim());
+        setQuiz(data);
+        setMode("running");
+        return;
+      }
       const getQuizImageId = (): string | null => {
         // 1) Explicit quiz selection
         const selected = sessionStorage.getItem("quizSelectedImageId");
@@ -63,13 +71,12 @@ export default function QuizPage() {
       }
       const data = await quizApi.byImage(imageId);
       setQuiz(data);
-      try { window.dispatchEvent(new Event("sessions:refresh")); } catch (_) { /* no-op */ }
       setMode("running");
     } catch (e) {
-      // Show error but still proceed with mock questions in the runner
+      // Show error and stay on setup; do NOT proceed with mock questions
       setError(e instanceof Error ? e.message : "Failed to load quiz");
       setQuiz(null);
-      setMode("running");
+      setMode("setup");
     } finally {
       setLoading(false);
     }

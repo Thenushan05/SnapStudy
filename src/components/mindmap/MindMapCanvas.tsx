@@ -65,7 +65,6 @@ export const MindMapCanvas = forwardRef<MindMapCanvasHandle, MindMapCanvasProps>
   const draggingRef = useRef<{ dragging: boolean; x: number; y: number } | null>(null);
   const didFitRef = useRef(false);
   const boxMapRef = useRef<Map<string, { x: number; y: number; w: number; h: number }>>(new Map());
-
   const cfg = useMemo(() => ({
     autoLayout: options?.autoLayout ?? false,
     layout: options?.layout ?? 'layered',
@@ -89,6 +88,10 @@ export const MindMapCanvas = forwardRef<MindMapCanvasHandle, MindMapCanvasProps>
       edge: options?.palette?.edge ?? '#e2e8f0',
     },
   }), [options]);
+
+  
+
+  
 
   // Auto layout: layered (default) or radial
   const nodes: Node[] = useMemo(() => {
@@ -175,6 +178,19 @@ export const MindMapCanvas = forwardRef<MindMapCanvasHandle, MindMapCanvasProps>
     }
     return Array.from(map.values());
   }, [baseNodes, cfg]);
+
+  // Compute content size from final node positions (after layout)
+  const contentSize = useMemo(() => {
+    const pad = 160;
+    if (!nodes.length) return { width: cfg.canvasMinWidth, height: 600 };
+    const xs = nodes.map(n => n.x);
+    const ys = nodes.map(n => n.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const width = Math.max(cfg.canvasMinWidth, Math.ceil(maxX - minX + pad * 2));
+    const height = Math.max(600, Math.ceil(maxY - minY + pad * 2));
+    return { width, height };
+  }, [nodes, cfg.canvasMinWidth]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -622,13 +638,13 @@ export const MindMapCanvas = forwardRef<MindMapCanvasHandle, MindMapCanvasProps>
   return (
     <div
       ref={containerRef}
-      className={cfg.fullBleed ? "w-full bg-surface min-h-screen" : "w-full bg-surface border border-border rounded-lg min-h-screen"}
-      style={{ height: 'auto', overflow: 'auto' }}
+      className={cfg.fullBleed ? "w-full bg-surface" : "w-full bg-surface border border-border rounded-lg"}
+      style={{ height: 'auto', minHeight: '70vh', overflow: 'auto' }}
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-pointer"
-        style={{ width: '100%', height: '100%', minHeight: '100vh', minWidth: `${cfg.canvasMinWidth}px`, touchAction: 'none' }}
+        className="w-full cursor-pointer"
+        style={{ width: '100%', height: `${contentSize.height}px`, minHeight: '70vh', minWidth: `${cfg.canvasMinWidth}px`, touchAction: 'none' }}
         onClick={handleCanvasClick}
         onDoubleClick={(e) => {
           if (!editable) return;

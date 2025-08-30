@@ -80,7 +80,6 @@ export function ChatThread({ messages, isLoading, onRetryProcess }: ChatThreadPr
         listBuffer.push(trimmed.replace(/^[-*]\s+/, ""));
         return;
       }
-      flushList();
       if (/^###\s+/.test(trimmed)) {
         elements.push(
           <h3
@@ -108,7 +107,28 @@ export function ChatThread({ messages, isLoading, onRetryProcess }: ChatThreadPr
       } else if (trimmed.length === 0) {
         elements.push(<div className="h-2" key={`sp-${i}`} />);
       } else {
-        elements.push(<p className="leading-relaxed" key={`p-${i}`} dangerouslySetInnerHTML={{ __html: inline(trimmed) }} />);
+        // Special styling for leading labels like "Summary:" and "Content Overview:" to make them attractive
+        const labelMatch = trimmed.match(/^(Summary:|Content Overview:)\s*/);
+        if (labelMatch) {
+          const label = labelMatch[1];
+          const rest = trimmed.slice(labelMatch[0].length);
+          elements.push(
+            <p className="leading-relaxed" key={`p-${i}`}>
+              <span className="inline-block align-middle mr-2 px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400 font-semibold">
+                {label}
+              </span>
+              <span dangerouslySetInnerHTML={{ __html: inline(rest) }} />
+            </p>
+          );
+        } else {
+          elements.push(
+            <p
+              className="leading-relaxed"
+              key={`p-${i}`}
+              dangerouslySetInnerHTML={{ __html: inline(trimmed) }}
+            />
+          );
+        }
       }
     });
     flushList();
